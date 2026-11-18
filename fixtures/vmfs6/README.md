@@ -170,3 +170,35 @@ Partial image: only what the tests read.
 `fixture-chain-v2/truth/`: `sha256.txt` with the base, the clones ESXi consolidated from each level
 (`clone/thin-g-at1..3`) and the delta files; the descriptors; `thin-g-atN.t0.txt` with ESXi's block map of each
 clone. `qemu-img convert` (7.2) produces the same content as ESXi at all three levels.
+
+## fixture-big-v1
+
+A 17 TiB datastore (thin device, ESXi 7.0.3). It was filled with four lazily allocated disks of 4100 GiB, so that
+the two test disks `t/thin` (1 GiB, thin) and `t/lazy` (2 GiB, lazy-zeroed) lie above the 16 TiB mark, where the
+logical volume has a second extent behind a 16 MiB gap. Partial image: 92 MiB of the device, 0.2 MiB packed.
+
+`fixture-big-v1/truth/`: ESXi's hashes of both flat files, their block maps (`*.t0.txt`), `vmkfstools -D` and
+`-Ph` output, the partition table.
+
+## fixture-span-v1
+
+A datastore that ESXi 7.0.3 created on a 3 GiB device and then extended onto a 2 GiB device (`vmkfstools -Z`).
+Two whole-device images: `fixture-span-v1-dev1.img.zst` and `fixture-span-v1-dev2.img.zst`. `d/lazy` (2600 MiB,
+lazy-zeroed) has blocks on both devices; `d/thin` lies on the second one.
+
+`fixture-span-v1/truth/`: ESXi's hashes, block maps, extent list (`extents.txt`), `voma` result (0 errors).
+
+## probe-series1
+
+No image, only the record of seven consistency runs (`results.json`), made with
+`fixtures/recipes/consistency_probe.py`; see `docs/consistency.md`.
+
+## fixture-inuse-v1
+
+A storage snapshot of the probe datastore, taken about a second after a VM snapshot, while the guest ran the
+marker workload of `fixtures/recipes/consistency_marker.py`. `probe/m.vmdk` is the disk below the VM snapshot
+(locked read-only, complete up to marker 1401); `probe/m-000001.vmdk` is the level the VM was writing to (delta
+locked exclusively, "replay journal" flag set). Partial image.
+
+`fixture-inuse-v1/truth/marker-runs.jsonl`: the record of four runs of the same workload **without** a VM
+snapshot, all of them inconsistent.

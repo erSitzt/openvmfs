@@ -24,7 +24,7 @@
 extern "C" {
 #endif
 
-#define OVMFS_ABI_VERSION 1
+#define OVMFS_ABI_VERSION 2
 
 #define OVMFS_OK 0
 #define OVMFS_ERR_IO 1            /* the device could not be read */
@@ -33,9 +33,15 @@ extern "C" {
 #define OVMFS_ERR_NOT_FOUND 4
 #define OVMFS_ERR_INVALID_INPUT 5
 #define OVMFS_ERR_INTERNAL 6      /* a bug in the library */
+#define OVMFS_ERR_IN_USE 7        /* a host was writing to the disk when the image was taken: snapshot the VM first */
 
 /* Read structures that have not been verified against ESXi instead of refusing them. For verification work. */
 #define OVMFS_OPEN_ACCEPT_UNVERIFIED 1u
+/* Read the devices without the page cache of the operating system (O_DIRECT, FILE_FLAG_NO_BUFFERING). */
+#define OVMFS_OPEN_DIRECT 2u
+/* Open disks although an ESXi host had them open for writing when the image was taken. Their content is then a mix
+ * of old and new that no crash would produce; only for looking at data that is known to be damaged anyway. */
+#define OVMFS_OPEN_ACCEPT_IN_USE 4u
 
 typedef struct ovmfs_volume ovmfs_volume;
 typedef struct ovmfs_disk ovmfs_disk;
@@ -63,10 +69,18 @@ uint32_t ovmfs_abi_version(void);
  * Opens the VMFS6 volume on a block device or in an image file (opened read-only).
  * device_path: a whole disk with a GUID partition table, or the VMFS partition itself.
  * partition:   0 to detect the VMFS partition, otherwise its number counted from 1.
- * flags:       0 or OVMFS_OPEN_ACCEPT_UNVERIFIED.
+ * flags:       0, or OVMFS_OPEN_* flags combined with |.
  */
 int32_t ovmfs_volume_open(const char *device_path, uint32_t partition, uint32_t flags,
                           ovmfs_volume **out_volume, ovmfs_error **out_error);
+/*
+ * Opens a VMFS6 volume that is stored on several devices (a datastore that was extended onto further LUNs).
+ * device_paths: all devices of the datastore, in any order; each as for ovmfs_volume_open.
+ * If one is missing, the call fails with OVMFS_ERR_INVALID_INPUT and a message that names the devices as ESXi
+ * recorded them.
+ */
+int32_t ovmfs_volume_open_devices(const char *const *device_paths, size_t device_count, uint32_t partition,
+                                  uint32_t flags, ovmfs_volume **out_volume, ovmfs_error **out_error);
 void ovmfs_volume_close(ovmfs_volume *volume);
 int32_t ovmfs_volume_get_info(const ovmfs_volume *volume, ovmfs_volume_info *out_info, ovmfs_error **out_error);
 

@@ -1,0 +1,7 @@
+total 2666624
+drwxr-xr-x    1 root     root         73728 Nov 18 21:39 .
+drwxr-xr-t    1 root     root         73728 Nov 18 21:39 ..
+-rw-------    1 root     root     2726297600 Nov 18 21:39 lazy-flat.vmdk
+-rw-------    1 root     root           442 Nov 18 21:39 lazy.vmdk
+-rw-------    1 root     root     1073741824 Nov 18 21:39 thin-flat.vmdk
+-rw-------    1 root     root           468 Nov 18 21:39 thin.vmdk

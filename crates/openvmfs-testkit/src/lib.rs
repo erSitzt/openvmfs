@@ -77,11 +77,19 @@ pub fn own_image(name: &str) -> PathBuf {
 ///
 /// Reading outside the captured ranges is an error, not zeros: a test must never pass because the reader looked at a
 /// place that was simply not captured.
+///
+/// The captured ranges are kept back to back in one file, so the device may be larger than any file the local
+/// filesystem can hold (a 17 TiB device does not fit into a sparse file on ext4).
 #[derive(Debug)]
 pub struct PartialSource {
-    file: FileSource,
-    /// Captured ranges as `(offset, length)`, sorted.
+    /// The captured ranges, back to back.
+    parts: FileSource,
+    /// Size of the device.
+    size: u64,
+    /// Captured ranges as `(offset, length)`, sorted, with neighbours merged.
     ranges: Vec<(u64, u64)>,
+    /// Where each range starts in `parts`.
+    starts: Vec<u64>,
 }
 
 impl PartialSource {
@@ -92,28 +100,36 @@ impl PartialSource {
 
     /// Whether `[offset, offset + len)` was captured.
     pub fn covers(&self, offset: u64, len: u64) -> bool {
-        self.ranges
-            .iter()
-            .any(|&(start, length)| start <= offset && offset + len <= start + length)
+        self.locate(offset, len).is_some()
+    }
+
+    /// Offset in the parts file of a range that was captured in full.
+    fn locate(&self, offset: u64, len: u64) -> Option<u64> {
+        let index = self
+            .ranges
+            .partition_point(|&(start, _)| start <= offset)
+            .checked_sub(1)?;
+        let (start, length) = self.ranges[index];
+        (offset.checked_add(len)? <= start + length).then(|| self.starts[index] + (offset - start))
     }
 }
 
 impl BlockSource for PartialSource {
     fn len(&self) -> u64 {
-        self.file.len()
+        self.size
     }
 
     fn read_exact_at(&self, offset: u64, buf: &mut [u8]) -> Result<()> {
-        if !self.covers(offset, buf.len() as u64) {
-            return Err(openvmfs::Error::new(
+        match self.locate(offset, buf.len() as u64) {
+            Some(position) => self.parts.read_exact_at(position, buf),
+            None => Err(openvmfs::Error::new(
                 openvmfs::ErrorKind::Io,
                 format!(
                     "read of {} bytes at {offset:#x} is outside the captured parts of this fixture",
                     buf.len()
                 ),
-            ));
+            )),
         }
-        self.file.read_exact_at(offset, buf)
     }
 }
 
@@ -128,48 +144,43 @@ pub fn own_partial_image(name: &str) -> PartialSource {
         .and_then(|line| line.strip_prefix("size "))
         .and_then(|text| text.parse().ok())
         .expect("the ranges file starts with `size BYTES`");
-    let ranges: Vec<(u64, u64)> = lines
-        .map(|line| {
-            let (offset, length) = line.split_once(' ').expect("OFFSET LENGTH");
-            (offset.parse().expect("offset"), length.parse().expect("length"))
-        })
-        .collect();
-
-    let unpacked = cache_dir().join("ours").join(format!("{name}.fixture.img"));
-    static LOCK: Mutex<()> = Mutex::new(());
-    let guard = LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-    let source = packed.metadata().expect("packed fixture metadata");
-    let stamp = format!("{} {:?}", source.len(), source.modified().ok());
-    let stamp_path = unpacked.with_extension("stamp");
-    if !(unpacked.is_file() && std::fs::read_to_string(&stamp_path).is_ok_and(|existing| existing == stamp)) {
-        std::fs::create_dir_all(unpacked.parent().expect("cache directory")).expect("create cache directory");
-        let partial = unpacked.with_extension(format!("partial-{}", std::process::id()));
-        let mut out = File::create(&partial).expect("create cache file");
-        mark_sparse(&partial);
-        let mut input =
-            ruzstd::decoding::StreamingDecoder::new(File::open(&packed).expect("open packed fixture")).expect("zstd");
-        let mut buf = vec![0u8; CHUNK];
-        for &(offset, length) in &ranges {
-            let mut done = 0u64;
-            while done < length {
-                let want = (CHUNK as u64).min(length - done) as usize;
-                input.read_exact(&mut buf[..want]).expect("decompress fixture");
-                if buf[..want].iter().any(|&b| b != 0) {
-                    out.seek(SeekFrom::Start(offset + done)).expect("seek");
-                    out.write_all(&buf[..want]).expect("write");
-                }
-                done += want as u64;
+    // The packed file holds the ranges in the listed order. Neighbours are merged, so that a read may cross them.
+    let mut ranges: Vec<(u64, u64)> = Vec::new();
+    let mut starts: Vec<u64> = Vec::new();
+    let mut total = 0u64;
+    for line in lines {
+        let (offset, length) = line.split_once(' ').expect("OFFSET LENGTH");
+        let (offset, length): (u64, u64) = (offset.parse().expect("offset"), length.parse().expect("length"));
+        match ranges.last_mut() {
+            Some(last) if last.0 + last.1 == offset => last.1 += length,
+            Some(last) => {
+                assert!(last.0 + last.1 < offset, "the ranges of {name} are not sorted");
+                ranges.push((offset, length));
+                starts.push(total);
+            }
+            None => {
+                ranges.push((offset, length));
+                starts.push(total);
             }
         }
-        out.set_len(size).expect("set length");
-        drop(out);
-        std::fs::rename(&partial, &unpacked).expect("move cache file into place");
-        std::fs::write(&stamp_path, stamp).expect("write stamp");
+        total += length;
     }
-    drop(guard);
+
+    let unpacked = cache_dir().join("ours").join(format!("{name}.fixture.parts"));
+    unpack_sparse(&packed, &unpacked, |file| {
+        Box::new(ruzstd::decoding::StreamingDecoder::new(file).expect("zstd header"))
+    });
+    let parts = FileSource::with_len(File::open(&unpacked).expect("open cache file"), total, name);
+    assert_eq!(
+        unpacked.metadata().expect("cache file").len(),
+        total,
+        "{name}: the packed parts do not match the ranges file"
+    );
     PartialSource {
-        file: FileSource::with_len(File::open(&unpacked).expect("open cache file"), size, name),
+        parts,
+        size,
         ranges,
+        starts,
     }
 }
 

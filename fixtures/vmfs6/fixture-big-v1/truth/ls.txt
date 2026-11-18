@@ -1,0 +1,21 @@
+fill:
+total 17196647552
+drwxr-xr-x    1 root     root         73728 Nov 18 21:30 .
+drwxr-xr-t    1 root     root         73728 Nov 18 21:30 ..
+-rw-------    1 root     root     4402341478400 Nov 18 21:30 f1-flat.vmdk
+-rw-------    1 root     root           446 Nov 18 21:30 f1.vmdk
+-rw-------    1 root     root     4402341478400 Nov 18 21:30 f2-flat.vmdk
+-rw-------    1 root     root           446 Nov 18 21:30 f2.vmdk
+-rw-------    1 root     root     4402341478400 Nov 18 21:30 f3-flat.vmdk
+-rw-------    1 root     root           446 Nov 18 21:30 f3.vmdk
+-rw-------    1 root     root     4402341478400 Nov 18 21:30 f4-flat.vmdk
+-rw-------    1 root     root           446 Nov 18 21:30 f4.vmdk
+
+t:
+total 2103424
+drwxr-xr-x    1 root     root         73728 Nov 18 21:30 .
+drwxr-xr-t    1 root     root         73728 Nov 18 21:30 ..
+-rw-------    1 root     root     2147483648 Nov 18 21:30 lazy-flat.vmdk
+-rw-------    1 root     root           442 Nov 18 21:30 lazy.vmdk
+-rw-------    1 root     root     1073741824 Nov 18 21:30 thin-flat.vmdk
+-rw-------    1 root     root           468 Nov 18 21:30 thin.vmdk

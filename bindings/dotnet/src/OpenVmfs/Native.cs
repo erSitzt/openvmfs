@@ -8,9 +8,11 @@ internal static unsafe partial class Native
     private const string Library = "openvmfs_c";
 
     /// <summary>The interface version this binding was written for.</summary>
-    internal const uint AbiVersion = 1;
+    internal const uint AbiVersion = 2;
 
     internal const uint OpenAcceptUnverified = 1;
+    internal const uint OpenDirect = 2;
+    internal const uint OpenAcceptInUse = 4;
 
     [StructLayout(LayoutKind.Sequential)]
     internal struct Range
@@ -36,6 +38,9 @@ internal static unsafe partial class Native
 
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int ovmfs_volume_open(string devicePath, uint partition, uint flags, out nint volume, out nint error);
+
+    [LibraryImport(Library)]
+    internal static partial int ovmfs_volume_open_devices(nint* devicePaths, nuint deviceCount, uint partition, uint flags, out nint volume, out nint error);
 
     [LibraryImport(Library)]
     internal static partial void ovmfs_volume_close(nint volume);

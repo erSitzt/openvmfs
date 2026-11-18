@@ -11,12 +11,24 @@ holds resident data and the address array.
 | 0x04 | 8 | volume offset of this descriptor | **[V]** |
 | 0x0C | 8 | volume offset of the owner's heartbeat slot | **[1]** |
 | 0x14 | 8 | heartbeat generation | **[1]** |
-| 0x24 | 4 | lock mode: 0 free, 1 exclusive, 2 read-only, 3 multi-writer | 0 **[V]** |
+| 0x24 | 4 | lock mode: 0 free, 1 exclusive, 2 read-only, 3 multi-writer | 0, 1 and 2 **[V]**, see below |
 | 0x28 | 16 | owner UUID | **[1]** |
 | 0x38 | 8 | modification time of the lock | **[1]** |
 
 An unused descriptor slot is all zeros **[V]**. OpenVmfs checks the lock type and that the recorded position equals
-the position the descriptor was read from. It does not interpret locks.
+the position the descriptor was read from.
+
+The lock mode says how hosts had the file open when an image of the datastore was taken **[V]**:
+
+| File | Mode | Owner (0x28) |
+|---|---|---|
+| Closed files, disks of a powered-off VM | 0 free | zeros |
+| Current disk of a running VM: its flat file, or its newest delta | 1 exclusive | UUID of the host |
+| Disk below a VM snapshot of a running VM | 2 read-only | zeros |
+
+A file that was open for writing has its newest block allocations in the host's memory and in the journal, not in
+its block map on disk (`docs/consistency.md`). OpenVmfs reports the mode in `FileStat::lock` and refuses to open a
+virtual disk with a file in mode 1 or 3.
 
 ## File metadata (offset 0x1000)
 

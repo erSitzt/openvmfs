@@ -23,6 +23,13 @@ public enum VmfsErrorKind
 
     /// <summary>A bug in the library.</summary>
     Internal = 6,
+
+    /// <summary>
+    /// An ESXi host had the disk open for writing when the image of the datastore was taken. What the image holds
+    /// of it may be out of date and out of order. Take a VM snapshot before the storage snapshot and read the disk
+    /// below it.
+    /// </summary>
+    InUse = 7,
 }
 
 /// <summary>An error reported by OpenVmfs. The message names the structure, field and offset involved.</summary>

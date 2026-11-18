@@ -31,6 +31,14 @@ int main(int argc, char **argv) {
     CHECK(ovmfs_volume_open("/nonexistent/device", 0, 0, &volume, NULL) == OVMFS_ERR_IO);
     CHECK(ovmfs_volume_open(argv[1], 0, 0x80, &volume, NULL) == OVMFS_ERR_INVALID_INPUT);
 
+    /* A list of one device is the same as a single device; an empty list is refused. */
+    const char *devices[1] = {argv[1]};
+    CHECK(ovmfs_volume_open_devices(devices, 0, 0, 0, &volume, NULL) == OVMFS_ERR_INVALID_INPUT);
+    CHECK(ovmfs_volume_open_devices(devices, 1, 0, 0, &volume, &error) == OVMFS_OK);
+    CHECK(volume != NULL && error == NULL);
+    ovmfs_volume_close(volume);
+    volume = NULL;
+
     CHECK(ovmfs_volume_open(argv[1], 0, 0, &volume, &error) == OVMFS_OK);
     CHECK(volume != NULL && error == NULL);
 

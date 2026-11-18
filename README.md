@@ -19,6 +19,9 @@ against the hashes and block maps ESXi itself reports, and file by file against 
 - Files of every size class: stored inside the descriptor, in sub-blocks, in file blocks, and through one or two
   levels of pointer blocks (tested up to a 42 TiB thin disk).
 - Directories, including names with non-ASCII characters; symbolic links; system files.
+- Datastores of any size seen so far, including above 16 TiB (where older tools read from the wrong place), and
+  datastores that span several devices.
+- Unbuffered reading of LUNs (`O_DIRECT`), without the caller having to align anything.
 - Snapshot chains: a disk with VM snapshots is read through its SESparse deltas down to the base, at any
   snapshot level, including ranges the guest discarded (checked against ESXi's own consolidation of each level,
   and against QEMU).
@@ -35,11 +38,12 @@ has another way to read the data should fall back to it.
 
 | Refused | Why |
 |---|---|
+| A virtual disk that an ESXi host had open for writing when the image was taken (error kind `InUse`) | Its newest writes may be missing while later ones are present |
 | "To be zeroed" markers other than the one ESXi was seen to write | Never seen |
 | A snapshot delta that was not closed cleanly (the active delta of a running VM) | Its journal would have to be replayed |
 | Zero grains in snapshot deltas, deltas in the older COWD format, chains across datastores | Never seen, or not created by VMFS6 |
-| Volumes spanning several devices, volumes over 16 TiB | Planned |
 | VMFS5, VMFS-L, VMFS 6.81, 4Kn devices | No verified sample yet |
+| Extended LVM extent metadata | Never seen; datastores of 3 TiB and 17 TiB do not use it |
 | Raw device mappings, encrypted disks | The data is not on the volume, or not readable |
 
 `OpenOptions::accept_unverified` (CLI: `OPENVMFS_ACCEPT_UNVERIFIED=1`) reads the first of these anyway. It is meant
@@ -48,9 +52,16 @@ for verification work; the data may be wrong.
 ## A note on consistency
 
 A snapshot of a mounted datastore is crash-consistent at best. VMFS keeps a journal that no public tool understands,
-so metadata that was changing when the snapshot was taken may be read in an old or half-updated state. In two lab
-probes, disks frozen by a VM snapshot 0.6 s before the storage snapshot read identical to ESXi
-([`docs/consistency.md`](docs/consistency.md)); that is encouraging, not a guarantee.
+so metadata that was changing when the snapshot was taken may be read in an old state. We measured both sides of
+this ([`docs/consistency.md`](docs/consistency.md)):
+
+- The disk of a VM that was writing, with no VM snapshot: wrong in 5 of 5 runs. The newest 8 to 11 MiB of newly
+  allocated data were missing while a later in-place write was present.
+- The same with a VM snapshot taken first, reading the disk below it: correct in 9 of 9 runs.
+
+ESXi records on disk which files a host has open for writing. OpenVmfs refuses to open a virtual disk in that
+state (error kind `InUse`), so the first case is caught rather than read. Nine runs in one small lab are
+encouraging, not a guarantee.
 `VolumeInfo::active_heartbeats` tells how many hosts were holding locks at that moment; zero does not prove the
 datastore was unmounted. Keep an independent check in the software that uses OpenVmfs.
 
@@ -63,9 +74,12 @@ openvmfs vmdk info   /dev/mapper/snapshot-lun vm1/vm1.vmdk
 openvmfs vmdk map    /dev/mapper/snapshot-lun vm1/vm1.vmdk
 openvmfs vmdk export /dev/mapper/snapshot-lun vm1/vm1.vmdk vm1.raw
 openvmfs vmdk info   /dev/mapper/snapshot-lun vm1/vm1-000002.vmdk    # the disk as of a snapshot
+openvmfs info        /dev/sdc,/dev/sdd                              # a datastore on two devices
+OPENVMFS_DIRECT=1 openvmfs vmdk export /dev/sdc vm1/vm1.vmdk vm1.raw  # without the page cache
 ```
 
-Exit code 3 means "unsupported": the data may be fine, but the tool refuses to guess.
+Exit code 3 means "unsupported": the data may be fine, but the tool refuses to guess. Exit code 4 means "in use":
+an ESXi host was writing to the disk when the image was taken.
 
 ## Library
 

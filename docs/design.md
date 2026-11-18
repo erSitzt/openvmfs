@@ -33,6 +33,13 @@ System files can depend on each other. They are opened in rounds: whatever can b
 far is resolved, and a round without progress is an error. This replaces the fixed opening order that older tools
 get wrong on some volumes.
 
+## Devices
+
+A `FileSource` reads an image file or a block device with positioned reads. Opened with `open_direct` it bypasses
+the page cache (`O_DIRECT`, `FILE_FLAG_NO_BUFFERING`): every read is widened to whole 4096-byte blocks and goes
+through a pooled, aligned buffer, so callers need not align anything. A datastore on several devices is opened from
+all of them; the logical volume maps every volume offset to a device and an offset on it.
+
 ## Virtual disks are stacks of layers
 
 A `Disk` is the base disk's flat file plus one layer per snapshot delta, newest first. A delta's tables are resolved

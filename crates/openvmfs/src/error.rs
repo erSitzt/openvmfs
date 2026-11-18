@@ -18,6 +18,11 @@ pub enum ErrorKind {
     NotFound,
     /// The caller passed something invalid (a path that is not a directory, a read beyond the end of a file).
     InvalidInput,
+    /// An ESXi host had the file open for writing when the image of the datastore was taken. What the image holds
+    /// of it may be out of date, and out of order: newer writes can be present while older ones are missing.
+    ///
+    /// For a virtual disk: take a VM snapshot before the storage snapshot and read the disk below it.
+    InUse,
 }
 
 impl ErrorKind {
@@ -28,6 +33,7 @@ impl ErrorKind {
             ErrorKind::Unsupported => "unsupported",
             ErrorKind::NotFound => "not found",
             ErrorKind::InvalidInput => "invalid input",
+            ErrorKind::InUse => "in use",
         }
     }
 }
@@ -61,6 +67,11 @@ impl Error {
     /// The data uses something that has not been verified and is refused.
     pub fn unsupported(message: impl Into<String>) -> Self {
         Self::new(ErrorKind::Unsupported, message)
+    }
+
+    /// A host had the file open for writing when the image was taken.
+    pub fn in_use(message: impl Into<String>) -> Self {
+        Self::new(ErrorKind::InUse, message)
     }
 
     /// Something does not exist.

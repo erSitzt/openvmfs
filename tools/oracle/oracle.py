@@ -17,13 +17,17 @@ MIB = 1 << 20
 
 
 def open_fs(image):
-    fh = open(image, "rb")
+    # A datastore on several devices is given as a comma-separated list of images.
     # For an image of a whole disk, ORACLE_PARTITION_OFFSET is where the VMFS partition starts.
     offset = int(os.environ.get("ORACLE_PARTITION_OFFSET", "0"), 0)
-    if offset:
-        size = fh.seek(0, os.SEEK_END) - offset
-        fh = RangeStream(fh, offset, size)
-    lvm = LVM(fh)
+    handles = []
+    for path in image.split(","):
+        fh = open(path, "rb")
+        if offset:
+            size = fh.seek(0, os.SEEK_END) - offset
+            fh = RangeStream(fh, offset, size)
+        handles.append(fh)
+    lvm = LVM(handles)
     return VMFS(lvm.volumes[0].open())
 
 

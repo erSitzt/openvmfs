@@ -11,12 +11,11 @@
 
 use std::ffi::{c_char, CStr, CString};
 use std::panic::{catch_unwind, AssertUnwindSafe};
-use std::sync::Arc;
 
-use openvmfs::{BlockSource, Disk, Error, ErrorKind, FileSource, OpenOptions, Volume};
+use openvmfs::{BlockSource, Disk, Error, ErrorKind, OpenOptions, Volume};
 
 /// Version of this interface. Changes when a function or structure changes incompatibly.
-pub const OVMFS_ABI_VERSION: u32 = 1;
+pub const OVMFS_ABI_VERSION: u32 = 2;
 
 /// Status codes. Zero is success.
 pub const OVMFS_OK: i32 = 0;
@@ -32,9 +31,20 @@ pub const OVMFS_ERR_NOT_FOUND: i32 = 4;
 pub const OVMFS_ERR_INVALID_INPUT: i32 = 5;
 /// A bug in the library.
 pub const OVMFS_ERR_INTERNAL: i32 = 6;
+/// A host had the file open for writing when the image was taken; what the image holds of it is not reliable.
+pub const OVMFS_ERR_IN_USE: i32 = 7;
 
 /// Flag for `ovmfs_volume_open`: read structures that have not been verified against ESXi instead of refusing.
 pub const OVMFS_OPEN_ACCEPT_UNVERIFIED: u32 = 1;
+
+/// Flag for `ovmfs_volume_open`: read the devices without the page cache of the operating system (`O_DIRECT`).
+pub const OVMFS_OPEN_DIRECT: u32 = 2;
+/// Flag for `ovmfs_volume_open`: open disks although a host was writing to them when the image was taken.
+pub const OVMFS_OPEN_ACCEPT_IN_USE: u32 = 4;
+const OPEN_FLAGS: u32 = OVMFS_OPEN_ACCEPT_UNVERIFIED | OVMFS_OPEN_DIRECT | OVMFS_OPEN_ACCEPT_IN_USE;
+
+/// Most devices `ovmfs_volume_open_devices` accepts.
+const MAX_DEVICES: usize = 32;
 
 /// An opened volume.
 #[allow(non_camel_case_types)]
@@ -93,6 +103,7 @@ fn status_of(kind: ErrorKind) -> i32 {
         ErrorKind::Unsupported => OVMFS_ERR_UNSUPPORTED,
         ErrorKind::NotFound => OVMFS_ERR_NOT_FOUND,
         ErrorKind::InvalidInput => OVMFS_ERR_INVALID_INPUT,
+        ErrorKind::InUse => OVMFS_ERR_IN_USE,
         _ => OVMFS_ERR_INTERNAL,
     }
 }
@@ -182,15 +193,65 @@ pub unsafe extern "C" fn ovmfs_volume_open(
                 return Err(invalid("out_volume is null"));
             }
             out_volume.write(std::ptr::null_mut());
-            if flags & !OVMFS_OPEN_ACCEPT_UNVERIFIED != 0 {
+            if flags & !OPEN_FLAGS != 0 {
                 return Err(invalid("unknown open flags"));
             }
             let path = utf8(device_path, "device_path")?;
             let options = OpenOptions {
                 partition: (partition != 0).then_some(partition),
                 accept_unverified: flags & OVMFS_OPEN_ACCEPT_UNVERIFIED != 0,
+                direct: flags & OVMFS_OPEN_DIRECT != 0,
+                accept_in_use: flags & OVMFS_OPEN_ACCEPT_IN_USE != 0,
             };
-            let volume = Volume::open_with(Arc::new(FileSource::open(path)?), &options)?;
+            let volume = Volume::open_paths(&[path], &options)?;
+            out_volume.write(Box::into_raw(Box::new(ovmfs_volume(volume))));
+            Ok(())
+        })
+    }
+}
+
+/// Opens a VMFS6 volume that is stored on several devices (a datastore with extents). All devices of the datastore
+/// are needed, in any order. With one device this is the same as `ovmfs_volume_open`.
+///
+/// # Safety
+/// `device_paths` must point to `device_count` pointers to NUL-terminated strings. `out_volume` must be valid for
+/// writing one pointer. `out_error` must be null or valid for writing one pointer.
+#[no_mangle]
+pub unsafe extern "C" fn ovmfs_volume_open_devices(
+    device_paths: *const *const c_char,
+    device_count: usize,
+    partition: u32,
+    flags: u32,
+    out_volume: *mut *mut ovmfs_volume,
+    out_error: *mut *mut ovmfs_error,
+) -> i32 {
+    // SAFETY: forwarded caller guarantees; see the function's safety section.
+    unsafe {
+        guarded(out_error, || {
+            if out_volume.is_null() {
+                return Err(invalid("out_volume is null"));
+            }
+            out_volume.write(std::ptr::null_mut());
+            if flags & !OPEN_FLAGS != 0 {
+                return Err(invalid("unknown open flags"));
+            }
+            if device_paths.is_null() || device_count == 0 {
+                return Err(invalid("no device given"));
+            }
+            if device_count > MAX_DEVICES {
+                return Err(invalid("too many devices"));
+            }
+            let mut paths = Vec::with_capacity(device_count);
+            for index in 0..device_count {
+                paths.push(utf8(device_paths.add(index).read(), "a device path")?);
+            }
+            let options = OpenOptions {
+                partition: (partition != 0).then_some(partition),
+                accept_unverified: flags & OVMFS_OPEN_ACCEPT_UNVERIFIED != 0,
+                direct: flags & OVMFS_OPEN_DIRECT != 0,
+                accept_in_use: flags & OVMFS_OPEN_ACCEPT_IN_USE != 0,
+            };
+            let volume = Volume::open_paths(&paths, &options)?;
             out_volume.write(Box::into_raw(Box::new(ovmfs_volume(volume))));
             Ok(())
         })

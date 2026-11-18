@@ -1,0 +1,24 @@
+VMFS-6.82 (Raw Major Version: 24) file system spanning 2 partitions.
+File system label (if any): sp
+Mode: public
+Capacity 4.5 GB, 566 MB available, file block size 1 MB, max supported file size 64 TB
+Volume Creation Time: Wed Nov 18 21:39:17 2026
+Files (max/free): 16384/16370
+Ptr Blocks (max/free): 0/0
+Sub Blocks (max/free): 16384/16380
+Secondary Ptr Blocks (max/free): 256/255
+File Blocks (overcommit/used/overcommit %): 0/4042/0
+Ptr Blocks  (overcommit/used/overcommit %): 0/0/0
+Sub Blocks  (overcommit/used/overcommit %): 0/4/0
+Large File Blocks (total/used/file block clusters): 9/0/9
+Volume Metadata size: 1502289920
+Disk Block Size: 512/512/0
+UUID: 6afe1b05-451014d4-aeab-0050568b5583
+Logical device: 6afe1b05-25147046-d05e-0050568b5583
+Partitions spanned (on "lvm"):
+	mpx.vmhba0:C0:T8:L0:1
+	mpx.vmhba0:C0:T9:L0:1
+Unable to connect to vaai-nasd socket [No such file or directory]
+Is Native Snapshot Capable: NO
+OBJLIB-LIB: ObjLib cleanup done.
+WORKER: asyncOps=0 maxActiveOps=0 maxPending=0 maxCompleted=0

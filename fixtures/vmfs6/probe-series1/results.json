@@ -1,0 +1,264 @@
+{
+ "runs": [
+  {
+   "run": 1,
+   "level": 0,
+   "descriptor": "probe/p.vmdk",
+   "ours": "eda2b8f2b982a61450a108c932b41722005877bad03760cfe9d8c172c71b8cb5",
+   "data_bytes": 13631488,
+   "active_heartbeats": "1 (hosts were holding locks when this image was taken)",
+   "seconds_enter_to_vm_snapshot_done": 0.89,
+   "seconds_vm_snapshot_done_to_outer_snapshot_done": 0.62,
+   "frozen_order": {
+    "full_mib": 4,
+    "partly_written_mib": 1,
+    "in_order": true,
+    "data_beyond_the_copy": 0
+   },
+   "active_order": {
+    "error": "000001.vmdk\": delta file \"probe/p-000001-sesparse.vmdk\": the SESparse delta was not closed cleanly (its journal would have to be replayed); this is the state of a delta that a running VM is writing to"
+   },
+   "active_delta": {
+    "length": 8388608,
+    "replay_journal": 1,
+    "journal_sectors_in_use": 0,
+    "allocated_grains": 0,
+    "grains_beyond_the_file": 0,
+    "file": "probe/p-000001-sesparse.vmdk"
+   },
+   "esxi": "eda2b8f2b982a61450a108c932b41722005877bad03760cfe9d8c172c71b8cb5",
+   "identical": true
+  },
+  {
+   "run": 2,
+   "level": 1,
+   "descriptor": "probe/p-000001.vmdk",
+   "ours": "39aae4e3b641e799cf1481c81dce555e0ab9bda612fab04dac83bc6db1edbc65",
+   "data_bytes": 91226112,
+   "active_heartbeats": "1 (hosts were holding locks when this image was taken)",
+   "seconds_enter_to_vm_snapshot_done": 1.95,
+   "seconds_vm_snapshot_done_to_outer_snapshot_done": 0.86,
+   "frozen_order": {
+    "full_mib": 79,
+    "partly_written_mib": 0,
+    "in_order": true,
+    "data_beyond_the_copy": 0
+   },
+   "active_order": {
+    "error": "000002.vmdk\": delta file \"probe/p-000002-sesparse.vmdk\": the SESparse delta was not closed cleanly (its journal would have to be replayed); this is the state of a delta that a running VM is writing to"
+   },
+   "frozen_delta": {
+    "length": 93585408,
+    "replay_journal": 0,
+    "journal_sectors_in_use": 324,
+    "allocated_grains": 19008,
+    "grains_beyond_the_file": 0,
+    "file": "probe/p-000001-sesparse.vmdk"
+   },
+   "active_delta": {
+    "length": 8388608,
+    "replay_journal": 1,
+    "journal_sectors_in_use": 0,
+    "allocated_grains": 0,
+    "grains_beyond_the_file": 0,
+    "file": "probe/p-000002-sesparse.vmdk"
+   },
+   "esxi": "39aae4e3b641e799cf1481c81dce555e0ab9bda612fab04dac83bc6db1edbc65",
+   "identical": true
+  },
+  {
+   "run": 3,
+   "level": 2,
+   "descriptor": "probe/p-000002.vmdk",
+   "ours": "34bdaee4d0875ed26c334ef744d4a1f84c49077fe616dec2efb0cb267e1d6421",
+   "data_bytes": 166723584,
+   "active_heartbeats": "1 (hosts were holding locks when this image was taken)",
+   "seconds_enter_to_vm_snapshot_done": 2.97,
+   "seconds_vm_snapshot_done_to_outer_snapshot_done": 0.8,
+   "frozen_order": {
+    "full_mib": 151,
+    "partly_written_mib": 0,
+    "in_order": true,
+    "data_beyond_the_copy": 0
+   },
+   "active_order": {
+    "error": "000003.vmdk\": delta file \"probe/p-000003-sesparse.vmdk\": the SESparse delta was not closed cleanly (its journal would have to be replayed); this is the state of a delta that a running VM is writing to"
+   },
+   "frozen_delta": {
+    "length": 93585408,
+    "replay_journal": 0,
+    "journal_sectors_in_use": 324,
+    "allocated_grains": 18432,
+    "grains_beyond_the_file": 0,
+    "file": "probe/p-000002-sesparse.vmdk"
+   },
+   "active_delta": {
+    "length": 8388608,
+    "replay_journal": 1,
+    "journal_sectors_in_use": 0,
+    "allocated_grains": 0,
+    "grains_beyond_the_file": 0,
+    "file": "probe/p-000003-sesparse.vmdk"
+   },
+   "esxi": "34bdaee4d0875ed26c334ef744d4a1f84c49077fe616dec2efb0cb267e1d6421",
+   "identical": true
+  },
+  {
+   "run": 4,
+   "level": 3,
+   "descriptor": "probe/p-000003.vmdk",
+   "ours": "7c06e6d9b49fb396b160c40210688f83b3ef0075606ed0744d1c9b9ec58341de",
+   "data_bytes": 244318208,
+   "active_heartbeats": "1 (hosts were holding locks when this image was taken)",
+   "seconds_enter_to_vm_snapshot_done": 4.03,
+   "seconds_vm_snapshot_done_to_outer_snapshot_done": 0.85,
+   "frozen_order": {
+    "full_mib": 225,
+    "partly_written_mib": 0,
+    "in_order": true,
+    "data_beyond_the_copy": 0
+   },
+   "active_order": {
+    "error": "000004.vmdk\": delta file \"probe/p-000004-sesparse.vmdk\": the SESparse delta was not closed cleanly (its journal would have to be replayed); this is the state of a delta that a running VM is writing to"
+   },
+   "frozen_delta": {
+    "length": 93585408,
+    "replay_journal": 0,
+    "journal_sectors_in_use": 324,
+    "allocated_grains": 18944,
+    "grains_beyond_the_file": 0,
+    "file": "probe/p-000003-sesparse.vmdk"
+   },
+   "active_delta": {
+    "length": 8388608,
+    "replay_journal": 1,
+    "journal_sectors_in_use": 0,
+    "allocated_grains": 0,
+    "grains_beyond_the_file": 0,
+    "file": "probe/p-000004-sesparse.vmdk"
+   },
+   "esxi": "7c06e6d9b49fb396b160c40210688f83b3ef0075606ed0744d1c9b9ec58341de",
+   "identical": true
+  },
+  {
+   "run": 5,
+   "level": 4,
+   "descriptor": "probe/p-000004.vmdk",
+   "ours": "687bee5c2f59144504d0a5d0dd95574691a8a1fb05c3e6c277d97fcd7dd2c09a",
+   "data_bytes": 282066944,
+   "active_heartbeats": "1 (hosts were holding locks when this image was taken)",
+   "seconds_enter_to_vm_snapshot_done": 0.98,
+   "seconds_vm_snapshot_done_to_outer_snapshot_done": 0.86,
+   "frozen_order": {
+    "full_mib": 261,
+    "partly_written_mib": 0,
+    "in_order": true,
+    "data_beyond_the_copy": 0
+   },
+   "active_order": {
+    "error": "000005.vmdk\": delta file \"probe/p-000005-sesparse.vmdk\": the SESparse delta was not closed cleanly (its journal would have to be replayed); this is the state of a delta that a running VM is writing to"
+   },
+   "frozen_delta": {
+    "length": 59506688,
+    "replay_journal": 0,
+    "journal_sectors_in_use": 324,
+    "allocated_grains": 9216,
+    "grains_beyond_the_file": 0,
+    "file": "probe/p-000004-sesparse.vmdk"
+   },
+   "active_delta": {
+    "length": 8388608,
+    "replay_journal": 1,
+    "journal_sectors_in_use": 0,
+    "allocated_grains": 0,
+    "grains_beyond_the_file": 0,
+    "file": "probe/p-000005-sesparse.vmdk"
+   },
+   "esxi": "687bee5c2f59144504d0a5d0dd95574691a8a1fb05c3e6c277d97fcd7dd2c09a",
+   "identical": true
+  },
+  {
+   "run": 6,
+   "level": 5,
+   "descriptor": "probe/p-000005.vmdk",
+   "ours": "b032cf575643bd261c5683f0fd95a18e14e911c6dbcb105e9f0c93ae5dd7ef79",
+   "data_bytes": 361758720,
+   "active_heartbeats": "1 (hosts were holding locks when this image was taken)",
+   "seconds_enter_to_vm_snapshot_done": 2.27,
+   "seconds_vm_snapshot_done_to_outer_snapshot_done": 1.27,
+   "frozen_order": {
+    "full_mib": 337,
+    "partly_written_mib": 0,
+    "in_order": true,
+    "data_beyond_the_copy": 0
+   },
+   "active_order": {
+    "error": "000006.vmdk\": delta file \"probe/p-000006-sesparse.vmdk\": the SESparse delta was not closed cleanly (its journal would have to be replayed); this is the state of a delta that a running VM is writing to"
+   },
+   "frozen_delta": {
+    "length": 93585408,
+    "replay_journal": 0,
+    "journal_sectors_in_use": 324,
+    "allocated_grains": 19456,
+    "grains_beyond_the_file": 0,
+    "file": "probe/p-000005-sesparse.vmdk"
+   },
+   "active_delta": {
+    "length": 8388608,
+    "replay_journal": 1,
+    "journal_sectors_in_use": 0,
+    "allocated_grains": 0,
+    "grains_beyond_the_file": 0,
+    "file": "probe/p-000006-sesparse.vmdk"
+   },
+   "esxi": "b032cf575643bd261c5683f0fd95a18e14e911c6dbcb105e9f0c93ae5dd7ef79",
+   "identical": true
+  },
+  {
+   "run": 7,
+   "level": 6,
+   "descriptor": "probe/p-000006.vmdk",
+   "ours": "737d7df865d2a06ade1e51757b1aec24b9413eb8776269351637bc7a3e0b0155",
+   "data_bytes": 436994048,
+   "active_heartbeats": "1 (hosts were holding locks when this image was taken)",
+   "seconds_enter_to_vm_snapshot_done": 3.05,
+   "seconds_vm_snapshot_done_to_outer_snapshot_done": 0.86,
+   "frozen_order": {
+    "full_mib": 408,
+    "partly_written_mib": 1,
+    "in_order": true,
+    "data_beyond_the_copy": 0
+   },
+   "active_order": {
+    "error": "000007.vmdk\": delta file \"probe/p-000007-sesparse.vmdk\": the SESparse delta was not closed cleanly (its journal would have to be replayed); this is the state of a delta that a running VM is writing to"
+   },
+   "frozen_delta": {
+    "length": 93585408,
+    "replay_journal": 0,
+    "journal_sectors_in_use": 324,
+    "allocated_grains": 18368,
+    "grains_beyond_the_file": 0,
+    "file": "probe/p-000006-sesparse.vmdk"
+   },
+   "active_delta": {
+    "length": 8388608,
+    "replay_journal": 1,
+    "journal_sectors_in_use": 0,
+    "allocated_grains": 0,
+    "grains_beyond_the_file": 0,
+    "file": "probe/p-000007-sesparse.vmdk"
+   },
+   "esxi": "737d7df865d2a06ade1e51757b1aec24b9413eb8776269351637bc7a3e0b0155",
+   "identical": true
+  }
+ ],
+ "final_delta_listing": [
+  "-rw-------    1 root     root      93585408 Nov 18 21:28 /vmfs/volumes/fp/probe/p-000001-sesparse.vmdk",
+  "-rw-------    1 root     root      93585408 Nov 18 21:31 /vmfs/volumes/fp/probe/p-000002-sesparse.vmdk",
+  "-rw-------    1 root     root      93585408 Nov 18 21:33 /vmfs/volumes/fp/probe/p-000003-sesparse.vmdk",
+  "-rw-------    1 root     root      59506688 Nov 18 21:36 /vmfs/volumes/fp/probe/p-000004-sesparse.vmdk",
+  "-rw-------    1 root     root      93585408 Nov 18 21:38 /vmfs/volumes/fp/probe/p-000005-sesparse.vmdk",
+  "-rw-------    1 root     root      93585408 Nov 18 21:40 /vmfs/volumes/fp/probe/p-000006-sesparse.vmdk",
+  "-rw-------    1 root     root      59506688 Nov 18 21:43 /vmfs/volumes/fp/probe/p-000007-sesparse.vmdk"
+ ]
+}

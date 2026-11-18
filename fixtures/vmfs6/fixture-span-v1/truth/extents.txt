@@ -1,0 +1,11 @@
+Volume Name                                 VMFS UUID                            Extent Number  Device Name          Partition
+------------------------------------------  -----------------------------------  -------------  -------------------  ---------
+f1                                          6afe0128-6db7a620-ec1b-0050568b5583              0  mpx.vmhba0:C0:T2:L0          1
+f2                                          6afe0153-138d6a42-11e3-0050568b5583              0  mpx.vmhba0:C0:T3:L0          1
+fz                                          6afdfbfe-33b90712-daa4-0050568b5583              0  mpx.vmhba0:C0:T1:L0          1
+fp                                          6afe1498-6f90893e-fe42-0050568b5583              0  mpx.vmhba0:C0:T4:L0          1
+b3                                          6afe188f-0615ac10-30fc-0050568b5583              0  mpx.vmhba0:C0:T5:L0          1
+b17                                         6afe1891-060c3190-377a-0050568b5583              0  mpx.vmhba0:C0:T6:L0          1
+sp                                          6afe1b05-451014d4-aeab-0050568b5583              0  mpx.vmhba0:C0:T8:L0          1
+sp                                          6afe1b05-451014d4-aeab-0050568b5583              1  mpx.vmhba0:C0:T9:L0          1
+OSDATA-6afdfa2f-040b72cc-0b6d-0050568b5583  6afdfa2f-040b72cc-0b6d-0050568b5583              0  mpx.vmhba0:C0:T0:L0          7

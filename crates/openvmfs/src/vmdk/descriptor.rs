@@ -272,6 +272,71 @@ ddb.thinProvisioned = "1"
 ddb.uuid = "60 00 C2 9c 4b 8a 3b 6b-5c 0c 2d a1 1e 6f 7c 11"
 "#;
 
+    /// A descriptor is text that anyone with access to the datastore can write. Whatever it holds, parsing must
+    /// end with a descriptor or an error.
+    #[test]
+    fn damaged_descriptors_never_panic() {
+        const SNAPSHOT: &str = "# Disk DescriptorFile\nversion=1\nencoding=\"UTF-8\"\nCID=dd4a9120\n\
+            parentCID=7b555d49\ncreateType=\"seSparse\"\nparentFileNameHint=\"grow.vmdk\"\n\
+            RW 819200 SESPARSE \"grow-000001-sesparse.vmdk\"\nddb.grain = \"8\"\n";
+        // xorshift, so that a failure can be reproduced.
+        let mut state = 0x9E37_79B9_7F4A_7C15u64;
+        let mut next = move || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state
+        };
+        let interesting: &[&[u8]] = &[
+            b"\"",
+            b"=",
+            b"\n",
+            b" ",
+            b"RW ",
+            b"ffffffff",
+            b"-1",
+            b"18446744073709551616",
+            b"\0",
+            b"\xFF\xFE",
+            b"#",
+        ];
+        let mut parsed = 0;
+        for round in 0..20_000 {
+            let mut text = if round % 2 == 0 {
+                FLAT.as_bytes().to_vec()
+            } else {
+                SNAPSHOT.as_bytes().to_vec()
+            };
+            for _ in 0..1 + next() % 4 {
+                let at = (next() % (text.len() as u64 + 1)) as usize;
+                match next() % 4 {
+                    0 if at < text.len() => text[at] = next() as u8,
+                    1 if at < text.len() => {
+                        text.remove(at);
+                    }
+                    2 => {
+                        let piece = interesting[(next() % interesting.len() as u64) as usize];
+                        text.splice(at..at, piece.iter().copied());
+                    }
+                    _ => text.truncate(at),
+                }
+            }
+            if let Ok(descriptor) = Descriptor::parse(&text) {
+                // Whatever was accepted can be looked at without surprises.
+                let _ = (
+                    descriptor.has_parent(),
+                    descriptor.thin_provisioned(),
+                    descriptor.io_filter_marker(),
+                );
+                parsed += 1;
+            }
+        }
+        assert!(
+            parsed > 0 && parsed < 20_000,
+            "{parsed} of 20000 damaged descriptors parsed"
+        );
+    }
+
     #[test]
     fn parses_a_flat_disk() {
         let d = Descriptor::parse(FLAT.as_bytes()).unwrap();

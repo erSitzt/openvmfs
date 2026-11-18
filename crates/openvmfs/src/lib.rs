@@ -48,7 +48,7 @@ pub mod vmdk;
 use std::fmt;
 
 pub use error::{Error, ErrorKind, Result};
-pub use fs::{DirEntry, Extent, ExtentKind, File, FileKind, FileStat, OpenOptions, Volume, VolumeInfo};
+pub use fs::{DirEntry, Extent, ExtentKind, File, FileKind, FileStat, LockMode, OpenOptions, Volume, VolumeInfo};
 pub use io::{BlockSource, FileSource, MemorySource, SubSource};
 pub use vmdk::{ChainLink, Disk};
 

@@ -82,6 +82,42 @@ impl AddressingMode {
     }
 }
 
+/// How ESXi hosts had a file locked, as recorded on disk.
+///
+/// In an image of a datastore that was in use, this tells whether a host had the file open, and how. A file that
+/// was open for writing may have newer content in the host's memory and in the VMFS journal than in the place a
+/// reader looks; see `docs/consistency.md`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LockMode {
+    /// Nobody held the file.
+    Free,
+    /// One host had it open for writing: a running VM's current disk, for example.
+    Exclusive,
+    /// Open for reading only, possibly by several hosts: a disk below a VM snapshot, for example.
+    ReadOnly,
+    /// Open for writing by several hosts (shared disks of cluster software).
+    MultiWriter,
+    /// A value this library does not know.
+    Other(u32),
+}
+
+impl LockMode {
+    fn from_raw(raw: u32) -> Self {
+        match raw {
+            0 => LockMode::Free,
+            1 => LockMode::Exclusive,
+            2 => LockMode::ReadOnly,
+            3 => LockMode::MultiWriter,
+            other => LockMode::Other(other),
+        }
+    }
+
+    /// Whether a host had the file open for writing.
+    pub fn is_open_for_writing(self) -> bool {
+        matches!(self, LockMode::Exclusive | LockMode::MultiWriter | LockMode::Other(_))
+    }
+}
+
 /// A parsed file descriptor.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Inode {
@@ -103,6 +139,9 @@ pub(crate) struct Inode {
     pub addressing: AddressingMode,
     pub num_tbz_blocks: u64,
     pub block_offset_shift: u8,
+    /// How the file was locked, and by which host.
+    pub lock_mode: LockMode,
+    pub lock_owner: crate::Uuid,
     /// The address array: block addresses or pointer-block addresses, depending on `addressing`.
     pub addrs: Vec<u64>,
 }
@@ -194,6 +233,8 @@ impl Inode {
                 .map_err(|e| e.context(format!("file descriptor {addr} at volume offset {volume_offset:#x}")))?,
             num_tbz_blocks: u64::from(meta.u32(0x48)?) | (u64::from(meta.u32(0x54)?) << 32),
             block_offset_shift: meta.u8(0x89)?,
+            lock_mode: LockMode::from_raw(lock.u32(0x24)?),
+            lock_owner: lock.uuid(0x28)?,
             addrs,
         })
     }

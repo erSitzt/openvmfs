@@ -16,14 +16,20 @@
 
 use std::sync::Arc;
 
-use openvmfs::{BlockSource, ExtentKind, Volume};
+use openvmfs::{BlockSource, ErrorKind, ExtentKind, LockMode, OpenOptions, Volume};
 use openvmfs_testkit::{own_partial_image, repo_root, ExpectedDisk, PartialSource, JUNK_MAGIC, SECTOR};
 
 const MIB: u64 = 1 << 20;
 
+/// The image was taken while the VM was running, without a VM snapshot: its disks were open for writing. The guest
+/// had finished and synced its writes long before, which is why they can be compared with ESXi here at all.
 fn open() -> (Arc<PartialSource>, Volume) {
     let device = Arc::new(own_partial_image("fixture-guest-v1"));
-    let volume = Volume::open(device.clone()).expect("open fixture");
+    let options = OpenOptions {
+        accept_in_use: true,
+        ..OpenOptions::default()
+    };
+    let volume = Volume::open_with(device.clone(), &options).expect("open fixture");
     (device, volume)
 }
 
@@ -50,6 +56,21 @@ fn plan(name: &str) -> ExpectedDisk {
         size,
         written,
     }
+}
+
+#[test]
+fn disks_of_a_running_vm_are_refused_unless_asked_for() {
+    let device = Arc::new(own_partial_image("fixture-guest-v1"));
+    let volume = Volume::open(device).unwrap();
+    // The host that runs the VM holds its disks exclusively; that is recorded on disk.
+    let flat = volume.stat("guest/thin-g-flat.vmdk").unwrap();
+    assert_eq!(flat.lock, LockMode::Exclusive);
+    assert_ne!(flat.lock_owner.to_string(), "00000000-00000000-0000-000000000000");
+    let error = volume.open_disk("guest/thin-g.vmdk").unwrap_err();
+    assert_eq!(error.kind(), ErrorKind::InUse);
+    assert!(error.to_string().contains("VM snapshot"), "{error}");
+    // Reading the file as a file stays possible: the caller sees the lock in its metadata.
+    assert!(volume.open_file("guest/thin-g-flat.vmdk").is_ok());
 }
 
 #[test]

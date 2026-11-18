@@ -11,9 +11,7 @@
 use std::io::{Seek, SeekFrom, Write};
 use std::process::ExitCode;
 
-use std::sync::Arc;
-
-use openvmfs::{BlockSource, Error, ErrorKind, Extent, ExtentKind, FileKind, FileSource, OpenOptions, Volume};
+use openvmfs::{BlockSource, Error, ErrorKind, Extent, ExtentKind, FileKind, OpenOptions, Volume};
 use sha2::{Digest, Sha256};
 
 const USAGE: &str = "\
@@ -36,8 +34,11 @@ Usage:
                                                  write the disk to a raw image (sparse), or to - for stdout
 
 <device> is an image file or a block device: a whole disk with a partition table, or the VMFS partition.
+For a datastore that spans several devices, give all of them separated by commas, in any order.
+Set OPENVMFS_DIRECT=1 to read without the operating system's page cache (O_DIRECT), as a backup of a LUN should.
 <descriptor> is the path of the small .vmdk text file inside the datastore, for example vm1/vm1.vmdk.
-Exit codes: 0 ok, 1 error, 2 usage, 3 unsupported (the data may be fine, but this tool refuses to guess).
+Exit codes: 0 ok, 1 error, 2 usage, 3 unsupported (the data may be fine, but this tool refuses to guess),
+4 in use (a host was writing to the disk when the image was taken; OPENVMFS_ACCEPT_IN_USE=1 reads it anyway).
 Set OPENVMFS_ACCEPT_UNVERIFIED=1 to read structures that have not been verified against ESXi yet (for testing).";
 
 const CHUNK: usize = 1 << 20;
@@ -53,7 +54,11 @@ fn main() -> ExitCode {
         }
         Err(CliError::Lib(error)) => {
             eprintln!("openvmfs: {error}");
-            ExitCode::from(if error.kind() == ErrorKind::Unsupported { 3 } else { 1 })
+            ExitCode::from(match error.kind() {
+                ErrorKind::Unsupported => 3,
+                ErrorKind::InUse => 4,
+                _ => 1,
+            })
         }
         Err(CliError::Io(error)) => {
             // A closed pipe (for example `| head`) is not an error worth reporting.
@@ -143,9 +148,13 @@ fn open(device: &str) -> Result<Volume, CliError> {
     }
     let options = OpenOptions {
         accept_unverified,
+        direct: std::env::var_os("OPENVMFS_DIRECT").is_some_and(|value| value == "1"),
+        accept_in_use: std::env::var_os("OPENVMFS_ACCEPT_IN_USE").is_some_and(|value| value == "1"),
         ..OpenOptions::default()
     };
-    Ok(Volume::open_with(Arc::new(FileSource::open(device)?), &options)?)
+    // A datastore on several devices is given as a comma-separated list.
+    let paths: Vec<&str> = device.split(',').collect();
+    Ok(Volume::open_paths(&paths, &options)?)
 }
 
 fn info(device: &str) -> CliResult {
@@ -161,7 +170,24 @@ fn info(device: &str) -> CliResult {
         "lvm volume:         {} (LVM {}.{})",
         info.lvm_volume.uuid, info.lvm_device.major_version, info.lvm_device.minor_version
     );
-    println!("lvm device:         {}", info.lvm_device.device_uuid);
+    for (index, device) in info.lvm_devices.iter().enumerate() {
+        if info.lvm_devices.len() == 1 {
+            println!("lvm device:         {}", device.device_uuid);
+        } else {
+            println!(
+                "lvm device {}:       {} ({} from volume offset {:#x}{})",
+                index.saturating_add(1),
+                device.device_uuid,
+                human(device.volume_len),
+                device.volume_start,
+                info.lvm_volume
+                    .device_names
+                    .get(index)
+                    .map(|name| format!(", {name}"))
+                    .unwrap_or_default()
+            );
+        }
+    }
     println!(
         "created on:         {} {}",
         info.lvm_device.scsi_vendor, info.lvm_device.scsi_model
@@ -237,6 +263,11 @@ fn stat(device: &str, path: &str) -> CliResult {
         stat.mtime, stat.ctime, stat.atime
     );
     println!("generation:  {}", stat.generation);
+    if stat.lock == openvmfs::LockMode::Free {
+        println!("lock:        free");
+    } else {
+        println!("lock:        {:?}, held by host {}", stat.lock, stat.lock_owner);
+    }
     if stat.kind == FileKind::Symlink {
         println!("target:      {}", volume.read_link(path)?);
     }
@@ -294,15 +325,20 @@ fn print_map(volume: &Volume, extents: &[Extent]) -> CliResult {
             ExtentKind::Hole => ("hole", None),
         };
         match volume_offset {
-            Some(offset) => writeln!(
-                out,
-                "{:#16x} {:#16x}  {:<6} {:#16x} {:#16x}",
-                extent.offset,
-                extent.len,
-                kind,
-                offset,
-                volume.device_offset(offset)?
-            )?,
+            Some(offset) => {
+                let (device, device_offset) = volume.device_location(offset)?;
+                // On a datastore with several devices, say which one (counted as they were given, from 1).
+                let which = if volume.device_count() > 1 {
+                    format!("  device {}", device.saturating_add(1))
+                } else {
+                    String::new()
+                };
+                writeln!(
+                    out,
+                    "{:#16x} {:#16x}  {:<6} {:#16x} {:#16x}{which}",
+                    extent.offset, extent.len, kind, offset, device_offset
+                )?;
+            }
             None => writeln!(
                 out,
                 "{:#16x} {:#16x}  {:<6} {:>16} {:>16}",

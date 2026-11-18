@@ -33,6 +33,88 @@ public sealed class SampleImageTests
         return VmfsVolume.Open(image!);
     }
 
+    private static string? FindCacheFile(params string[] parts)
+    {
+        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
+        {
+            var candidate = Path.Combine([dir.FullName, "target", "fixture-cache", .. parts]);
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
+
+    [Fact]
+    public void DatastoreOnTwoDevices()
+    {
+        // Unpacked by `cargo test -p openvmfs-testkit --test fixture_span`.
+        var first = FindCacheFile("ours", "fixture-span-v1-dev1.fixture.img");
+        var second = FindCacheFile("ours", "fixture-span-v1-dev2.fixture.img");
+        Assert.SkipWhen(first is null || second is null, "The spanned fixture has not been unpacked.");
+
+        // In any order.
+        using var volume = VmfsVolume.Open([second!, first!]);
+        Assert.Equal("sp", volume.Label);
+        Assert.Equal(4608 * MiB, volume.Capacity);
+        using var disk = volume.OpenDisk("d/lazy.vmdk");
+        Assert.Equal(2600 * MiB, disk.Capacity);
+        using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        var buffer = new byte[4 * MiB];
+        for (long offset = 0; offset < disk.Capacity; offset += buffer.Length)
+        {
+            var length = (int)Math.Min(buffer.Length, disk.Capacity - offset);
+            disk.Read(offset, buffer.AsSpan(0, length));
+            sha.AppendData(buffer, 0, length);
+        }
+
+        // What ESXi computed for d/lazy-flat.vmdk (fixtures/vmfs6/fixture-span-v1/truth/sha256.txt).
+        Assert.Equal(
+            "9dc96335f5b1e08e3725f7613d607b5377eb9c4d36127ef69d77adeb9d066f22",
+            Convert.ToHexStringLower(sha.GetHashAndReset()));
+
+        // One device alone is refused, and the message names both.
+        var error = Assert.Throws<VmfsException>(() => VmfsVolume.Open(first!));
+        Assert.Equal(VmfsErrorKind.InvalidInput, error.Kind);
+        Assert.Contains("mpx.vmhba0:C0:T9:L0:1", error.Message);
+    }
+
+    [Fact]
+    public void UnbufferedReadsReturnTheSameBytes()
+    {
+        var image = FindImage();
+        Assert.SkipWhen(image is null, "The sample image target/fixture-cache/dissect/vmfs6.bin is missing.");
+        using var buffered = VmfsVolume.Open(image!);
+        VmfsVolume direct;
+        try
+        {
+            direct = VmfsVolume.Open(image!, new VmfsOpenOptions { DirectIo = true });
+        }
+        catch (VmfsException error) when (error.Kind == VmfsErrorKind.Io)
+        {
+            // Some filesystems (tmpfs, some network mounts) refuse unbuffered opens.
+            Assert.Skip("The filesystem holding the sample image does not support unbuffered reading.");
+            return;
+        }
+
+        using (direct)
+        {
+            using var a = buffered.OpenDisk("normal.vmdk");
+            using var b = direct.OpenDisk("normal.vmdk");
+            // Odd offsets and lengths: the library aligns on its own.
+            foreach (var (offset, length) in new[] { (42 * GiB, 4096), (42 * GiB + 1, 513), (42 * GiB + 4095, 70_001) })
+            {
+                var expected = new byte[length];
+                var actual = new byte[length];
+                a.Read(offset, expected);
+                b.Read(offset, actual);
+                Assert.Equal(expected, actual);
+            }
+        }
+    }
+
     [Fact]
     public void VolumeFacts()
     {

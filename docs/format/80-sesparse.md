@@ -35,9 +35,20 @@ An empty delta is a 6 MiB file: metadata only.
 ## Volatile header
 
 At its offset, 512 bytes: magic 0x00000000CAFECAFE **[V]**, number of grain tables in use, next transaction number,
-and a "replay journal" flag, followed by zero padding. The flag was 0 on every delta of a powered-off VM **[V]**. A
-non-zero flag means the file was not closed cleanly **[1]**; OpenVmfs refuses such a delta, because it cannot
-replay the journal.
+and a "replay journal" flag, followed by zero padding.
+
+| State of the delta | Flag |
+|---|---|
+| VM powered off | 0 **[V]** |
+| Closed by a later VM snapshot while the VM keeps running | 0 **[V]** (7 of 7 storage snapshots taken 0.6 to 1.3 s after the VM snapshot) |
+| The delta a running VM is writing to | 1 **[V]** (7 of 7) |
+| Just created, no guest I/O on the disk yet | 0 (seen once) |
+| Newest delta of a disk that the running guest only reads | 1 **[V]** |
+
+A delta with the flag set cannot be trusted: in all seven cases its grain tables on disk showed none of the data
+the guest had written to it in the 0.6 to 1.3 s since it was created, and the file was still as short as an empty
+delta. OpenVmfs refuses such a delta, because it cannot replay the journal. The journal header (sector 2) starts
+with the magic 0xDEAFC0DE **[V]**; the journal itself has not been analysed.
 
 ## Grain directory and grain tables
 

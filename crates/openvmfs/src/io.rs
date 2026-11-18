@@ -63,16 +63,27 @@ pub(crate) fn read_vec(source: &dyn BlockSource, offset: u64, len: u64, what: &s
     Ok(buf)
 }
 
+/// Block size that unbuffered reads are aligned to. It suits devices with 512-byte and with 4096-byte sectors.
+const DIRECT_ALIGNMENT: u64 = 4096;
+/// Bounce buffers kept for reuse, and the largest one that is kept.
+const POOLED_BUFFERS: usize = 8;
+const POOLED_BUFFER_LIMIT: usize = 8 << 20;
+
 /// An image file or a block device, opened read-only.
 pub struct FileSource {
     file: std::fs::File,
     len: u64,
     name: String,
+    /// Set when the file was opened for unbuffered I/O: offsets, lengths and buffers must then be multiples of this.
+    alignment: Option<u64>,
+    /// Aligned buffers for unbuffered reads.
+    pool: std::sync::Mutex<Vec<Vec<u8>>>,
 }
 
 impl fmt::Debug for FileSource {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "FileSource({}, {} bytes)", self.name, self.len)
+        let how = if self.alignment.is_some() { ", unbuffered" } else { "" };
+        write!(f, "FileSource({}, {} bytes{how})", self.name, self.len)
     }
 }
 
@@ -85,6 +96,34 @@ impl FileSource {
         let path = path.as_ref();
         let name = path.display().to_string();
         let file = std::fs::File::open(path).map_err(|e| Error::io(format!("cannot open {name}"), e))?;
+        Self::measure(file, name)
+    }
+
+    /// Opens a block device or an image file for unbuffered reading: `O_DIRECT` on Linux,
+    /// `FILE_FLAG_NO_BUFFERING` on Windows.
+    ///
+    /// Reads then bypass the page cache of the operating system. That is what a backup of a LUN wants: the data is
+    /// read once, and caching it would only push other things out of memory. It also makes sure that what is read
+    /// comes from the device and not from a stale cache of an earlier state of a snapshot LUN.
+    ///
+    /// Callers need not align anything: every read is widened to whole blocks of 4096 bytes and goes through an
+    /// aligned buffer.
+    pub fn open_direct(path: impl AsRef<Path>) -> Result<Self> {
+        let path = path.as_ref();
+        let name = path.display().to_string();
+        let mut options = std::fs::OpenOptions::new();
+        options.read(true);
+        direct_flag(&mut options)?;
+        let file = options.open(path).map_err(|e| {
+            Error::io(
+                format!("cannot open {name} for unbuffered reading (not every filesystem supports it; devices do)"),
+                e,
+            )
+        })?;
+        Ok(Self::measure(file, name)?.with_alignment(DIRECT_ALIGNMENT))
+    }
+
+    fn measure(file: std::fs::File, name: String) -> Result<Self> {
         let metadata = file
             .metadata()
             .map_err(|e| Error::io(format!("cannot stat {name}"), e))?;
@@ -100,7 +139,7 @@ impl FileSource {
                 "{name} has size 0; for a raw device whose size cannot be detected, supply it with FileSource::with_len"
             )));
         }
-        Ok(FileSource { file, len, name })
+        Ok(Self::with_len(file, len, name))
     }
 
     /// Wraps an already opened file or device whose size the caller knows.
@@ -109,30 +148,136 @@ impl FileSource {
             file,
             len,
             name: name.into(),
+            alignment: None,
+            pool: std::sync::Mutex::new(Vec::new()),
         }
     }
 
-    #[cfg(unix)]
-    fn read_at(&self, offset: u64, buf: &mut [u8]) -> std::io::Result<()> {
-        std::os::unix::fs::FileExt::read_exact_at(&self.file, buf, offset)
+    /// Declares that the file was opened for unbuffered I/O, which needs offsets, lengths and buffers that are
+    /// multiples of `alignment` (a power of two, at least the sector size of the device). Reads are widened
+    /// accordingly. [`FileSource::open_direct`] does this itself; this is for files the caller opened.
+    pub fn with_alignment(mut self, alignment: u64) -> Self {
+        self.alignment = (alignment > 1 && alignment.is_power_of_two()).then_some(alignment);
+        self
     }
 
-    #[cfg(windows)]
-    fn read_at(&self, mut offset: u64, mut buf: &mut [u8]) -> std::io::Result<()> {
-        use std::os::windows::fs::FileExt;
-        while !buf.is_empty() {
-            let n = self.file.seek_read(buf, offset)?;
-            if n == 0 {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::UnexpectedEof,
-                    "unexpected end of file",
-                ));
+    /// Reads into `buf` as far as the file goes; returns the number of bytes read.
+    fn read_some(&self, mut offset: u64, buf: &mut [u8]) -> std::io::Result<usize> {
+        let mut done = 0usize;
+        while let Some(rest) = buf.get_mut(done..).filter(|rest| !rest.is_empty()) {
+            #[cfg(unix)]
+            let n = std::os::unix::fs::FileExt::read_at(&self.file, rest, offset);
+            #[cfg(windows)]
+            let n = std::os::windows::fs::FileExt::seek_read(&self.file, rest, offset);
+            match n {
+                Ok(0) => break,
+                Ok(n) => {
+                    done = done.saturating_add(n);
+                    offset = offset.saturating_add(n as u64);
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+                Err(e) => return Err(e),
             }
-            buf = buf.get_mut(n..).unwrap_or_default();
-            offset = offset.saturating_add(n as u64);
         }
-        Ok(())
+        Ok(done)
     }
+
+    fn read_at(&self, offset: u64, buf: &mut [u8]) -> std::io::Result<()> {
+        let Some(alignment) = self.alignment else {
+            return match self.read_some(offset, buf)? {
+                n if n == buf.len() => Ok(()),
+                _ => Err(unexpected_end()),
+            };
+        };
+        // Widen the read to whole blocks and read them into an aligned buffer. The last block of a file whose
+        // size is not a multiple of the alignment comes back short, which is fine as long as it covers the request.
+        let mask = alignment.saturating_sub(1);
+        let start = offset & !mask;
+        let end = offset.saturating_add(buf.len() as u64).saturating_add(mask) & !mask;
+        let head = usize::try_from(offset.saturating_sub(start)).map_err(|_| too_large())?;
+        let wide = usize::try_from(end.saturating_sub(start)).map_err(|_| too_large())?;
+        let align = usize::try_from(alignment).map_err(|_| too_large())?;
+
+        let mut bounce = self.take_buffer(wide.saturating_add(align));
+        let pad = bounce.as_ptr().align_offset(align);
+        let result = match bounce.get_mut(pad..pad.saturating_add(wide)) {
+            Some(aligned) => self.read_some(start, aligned).and_then(|n| {
+                let wanted = aligned
+                    .get(head..head.saturating_add(buf.len()))
+                    .filter(|_| n >= head.saturating_add(buf.len()));
+                match wanted {
+                    Some(bytes) => {
+                        buf.copy_from_slice(bytes);
+                        Ok(())
+                    }
+                    None => Err(unexpected_end()),
+                }
+            }),
+            None => Err(too_large()),
+        };
+        self.return_buffer(bounce);
+        result
+    }
+
+    fn take_buffer(&self, len: usize) -> Vec<u8> {
+        let pooled = self.pool.lock().ok().and_then(|mut pool| {
+            let index = pool.iter().position(|buffer| buffer.len() >= len)?;
+            Some(pool.swap_remove(index))
+        });
+        pooled.unwrap_or_else(|| vec![0u8; len])
+    }
+
+    fn return_buffer(&self, buffer: Vec<u8>) {
+        if buffer.len() <= POOLED_BUFFER_LIMIT {
+            if let Ok(mut pool) = self.pool.lock() {
+                if pool.len() < POOLED_BUFFERS {
+                    pool.push(buffer);
+                }
+            }
+        }
+    }
+}
+
+fn unexpected_end() -> std::io::Error {
+    std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "unexpected end of file")
+}
+
+fn too_large() -> std::io::Error {
+    std::io::Error::new(std::io::ErrorKind::InvalidInput, "read too large")
+}
+
+/// Adds the flag that asks the operating system for unbuffered I/O.
+#[cfg(target_os = "linux")]
+fn direct_flag(options: &mut std::fs::OpenOptions) -> Result<()> {
+    // O_DIRECT is not the same number everywhere; these are the values of the Linux kernel headers.
+    let flag: Option<i32> = if cfg!(any(
+        target_arch = "x86_64",
+        target_arch = "x86",
+        target_arch = "riscv64"
+    )) {
+        Some(0o40000)
+    } else if cfg!(any(target_arch = "aarch64", target_arch = "arm")) {
+        Some(0o200000)
+    } else {
+        None
+    };
+    let flag = flag.ok_or_else(|| Error::unsupported("unbuffered reading is not wired up for this processor type"))?;
+    std::os::unix::fs::OpenOptionsExt::custom_flags(options, flag);
+    Ok(())
+}
+
+#[cfg(windows)]
+fn direct_flag(options: &mut std::fs::OpenOptions) -> Result<()> {
+    const FILE_FLAG_NO_BUFFERING: u32 = 0x2000_0000;
+    std::os::windows::fs::OpenOptionsExt::custom_flags(options, FILE_FLAG_NO_BUFFERING);
+    Ok(())
+}
+
+#[cfg(not(any(target_os = "linux", windows)))]
+fn direct_flag(_options: &mut std::fs::OpenOptions) -> Result<()> {
+    Err(Error::unsupported(
+        "unbuffered reading is not available on this operating system",
+    ))
 }
 
 impl BlockSource for FileSource {

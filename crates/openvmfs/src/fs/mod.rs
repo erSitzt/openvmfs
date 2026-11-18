@@ -14,7 +14,7 @@ pub use addr::FdAddr;
 pub use blockmap::{Extent, ExtentKind};
 pub use descriptor::FsDescriptor;
 pub use dir::DirEntry;
-pub use inode::{AddressingMode, FileKind};
+pub use inode::{AddressingMode, FileKind, LockMode};
 
 use crate::bytes::{to_usize, View};
 use crate::error::{Error, ErrorKind, Result, ResultExt};
@@ -53,6 +53,15 @@ pub struct OpenOptions {
     ///
     /// Meant for verification work. Data read this way may be wrong.
     pub accept_unverified: bool,
+    /// Open virtual disks although an ESXi host had their files open for writing when the image was taken,
+    /// instead of refusing them with [`ErrorKind::InUse`].
+    ///
+    /// Such a disk can be missing its newest writes while later writes to other places are present, which no
+    /// crash would produce (`docs/consistency.md`). Only for looking at data that is known to be damaged anyway.
+    pub accept_in_use: bool,
+    /// Read devices without going through the page cache of the operating system; see
+    /// [`FileSource::open_direct`]. Applies to [`Volume::open_paths`], which opens the devices itself.
+    pub direct: bool,
 }
 
 /// Facts about an opened volume.
@@ -68,7 +77,8 @@ pub struct VolumeInfo {
     pub capacity: u64,
     /// Size of a file block.
     pub file_block_size: u64,
-    /// Offset of the VMFS partition on the device that was opened (0 for a bare partition).
+    /// Offset of the VMFS partition on the device that was opened (0 for a bare partition). For a datastore on
+    /// several devices: on the first one in the list it was opened with.
     pub partition_offset: u64,
     /// Heartbeat slots marked in use: hosts that were holding locks on the datastore (running VMs, open files)
     /// when the image was taken, so metadata may have been in the middle of an update.
@@ -77,8 +87,10 @@ pub struct VolumeInfo {
     pub active_heartbeats: u32,
     /// The filesystem descriptor.
     pub descriptor: FsDescriptor,
-    /// The LVM device header.
+    /// The LVM device header of the datastore's first device.
     pub lvm_device: LvmDevice,
+    /// The LVM device headers of all devices of the datastore, in the order of their parts of the volume.
+    pub lvm_devices: Vec<LvmDevice>,
     /// The LVM volume.
     pub lvm_volume: LvmVolume,
 }
@@ -116,6 +128,10 @@ pub struct FileStat {
     pub links: u32,
     /// Generation of the descriptor.
     pub generation: u32,
+    /// How ESXi hosts had the file locked when the image was taken.
+    pub lock: LockMode,
+    /// The host that held the lock (all zeros when free).
+    pub lock_owner: Uuid,
 }
 
 impl FileStat {
@@ -136,7 +152,54 @@ impl FileStat {
             mode: inode.mode,
             links: inode.link_count,
             generation: inode.generation,
+            lock: inode.lock_mode,
+            lock_owner: inode.lock_owner,
         }
+    }
+}
+
+/// Finds the VMFS partition on a device: the device itself, the partition asked for, or the only VMFS partition in
+/// its partition table. Returns the partition and its offset on the device.
+fn find_partition(device: Arc<dyn BlockSource>, options: &OpenOptions) -> Result<(Arc<dyn BlockSource>, u64)> {
+    if let Some(number) = options.partition {
+        let partitions = gpt::read_partitions(&*device)?
+            .ok_or_else(|| Error::not_found("the device has no GUID partition table"))?;
+        let partition = partitions
+            .iter()
+            .find(|p| p.number == number)
+            .ok_or_else(|| Error::not_found(format!("the device has no partition {number}")))?;
+        let view = SubSource::new(device.clone(), partition.start, partition.len)?;
+        return Ok((Arc::new(view), partition.start));
+    }
+    if LogicalVolume::probe(&*device)? {
+        return Ok((device, 0));
+    }
+    let partitions = gpt::read_partitions(&*device)?.ok_or_else(|| {
+        Error::not_found("no VMFS volume found: the device has neither an LVM header nor a GUID partition table")
+    })?;
+    let mut candidates = Vec::new();
+    for partition in partitions.iter().filter(|p| p.is_vmfs()) {
+        let view = SubSource::new(device.clone(), partition.start, partition.len)?;
+        if LogicalVolume::probe(&view)? {
+            candidates.push((partition.clone(), view));
+        }
+    }
+    match candidates.len() {
+        1 => {
+            let (partition, view) = candidates.remove(0);
+            Ok((Arc::new(view), partition.start))
+        }
+        0 => Err(Error::not_found(
+            "no VMFS volume found in the partition table of the device",
+        )),
+        n => Err(Error::invalid_input(format!(
+            "the device has {n} VMFS partitions ({}); choose one with OpenOptions::partition",
+            candidates
+                .iter()
+                .map(|(p, _)| p.number.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        ))),
     }
 }
 
@@ -232,7 +295,9 @@ fn fatal(error: MapError) -> Error {
 #[derive(Debug)]
 struct VolumeInner {
     volume: LogicalVolume,
-    partition_offset: u64,
+    accept_in_use: bool,
+    /// Offset of the VMFS partition on each device, in the order the devices were passed in.
+    partition_offsets: Vec<u64>,
     descriptor: FsDescriptor,
     geo: Geometry,
     resources: Resources,
@@ -261,50 +326,50 @@ impl Volume {
 
     /// Opens the VMFS6 volume on `device` with explicit options.
     pub fn open_with(device: Arc<dyn BlockSource>, options: &OpenOptions) -> Result<Self> {
-        if let Some(number) = options.partition {
-            let partitions = gpt::read_partitions(&*device)?
-                .ok_or_else(|| Error::not_found("the device has no GUID partition table"))?;
-            let partition = partitions
-                .iter()
-                .find(|p| p.number == number)
-                .ok_or_else(|| Error::not_found(format!("the device has no partition {number}")))?;
-            let view = SubSource::new(device.clone(), partition.start, partition.len)?;
-            return Self::open_at(Arc::new(view), partition.start, options);
-        }
-        if LogicalVolume::probe(&*device)? {
-            return Self::open_at(device, 0, options);
-        }
-        let partitions = gpt::read_partitions(&*device)?.ok_or_else(|| {
-            Error::not_found("no VMFS volume found: the device has neither an LVM header nor a GUID partition table")
-        })?;
-        let mut candidates = Vec::new();
-        for partition in partitions.iter().filter(|p| p.is_vmfs()) {
-            let view = SubSource::new(device.clone(), partition.start, partition.len)?;
-            if LogicalVolume::probe(&view)? {
-                candidates.push((partition.clone(), view));
-            }
-        }
-        match candidates.len() {
-            1 => {
-                let (partition, view) = candidates.remove(0);
-                Self::open_at(Arc::new(view), partition.start, options)
-            }
-            0 => Err(Error::not_found(
-                "no VMFS volume found in the partition table of the device",
-            )),
-            n => Err(Error::invalid_input(format!(
-                "the device has {n} VMFS partitions ({}); choose one with OpenOptions::partition",
-                candidates
-                    .iter()
-                    .map(|(p, _)| p.number.to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ))),
-        }
+        Self::open_devices(vec![device], options)
     }
 
-    fn open_at(partition: Arc<dyn BlockSource>, partition_offset: u64, options: &OpenOptions) -> Result<Self> {
-        let volume = LogicalVolume::open(partition)?;
+    /// Opens a VMFS6 volume that is stored on one or more devices.
+    ///
+    /// A datastore that was extended onto further devices ("extents") needs all of them, in any order. Each device
+    /// is a VMFS partition or a disk with exactly one VMFS partition.
+    pub fn open_devices(devices: Vec<Arc<dyn BlockSource>>, options: &OpenOptions) -> Result<Self> {
+        let single = devices.len() == 1;
+        let mut partitions = Vec::with_capacity(devices.len());
+        let mut offsets = Vec::with_capacity(devices.len());
+        for (index, device) in devices.into_iter().enumerate() {
+            let found = find_partition(device, options);
+            let (partition, offset) = if single {
+                found?
+            } else {
+                found.context(format!("device {index}"))?
+            };
+            partitions.push(partition);
+            offsets.push(offset);
+        }
+        Self::open_at(partitions, offsets, options)
+    }
+
+    /// Opens a VMFS6 volume from image files or block devices; see [`Volume::open_devices`].
+    pub fn open_paths<P: AsRef<Path>>(paths: &[P], options: &OpenOptions) -> Result<Self> {
+        let mut devices: Vec<Arc<dyn BlockSource>> = Vec::with_capacity(paths.len());
+        for path in paths {
+            let source = if options.direct {
+                FileSource::open_direct(path)?
+            } else {
+                FileSource::open(path)?
+            };
+            devices.push(Arc::new(source));
+        }
+        Self::open_devices(devices, options)
+    }
+
+    fn open_at(
+        partitions: Vec<Arc<dyn BlockSource>>,
+        partition_offsets: Vec<u64>,
+        options: &OpenOptions,
+    ) -> Result<Self> {
+        let volume = LogicalVolume::open_devices(partitions)?;
         let descriptor = FsDescriptor::read(&volume)?;
         if descriptor.lvm_volume_uuid != volume.volume_info().uuid {
             return Err(Error::corrupt(format!(
@@ -318,7 +383,8 @@ impl Volume {
 
         let mut inner = VolumeInner {
             volume,
-            partition_offset,
+            accept_in_use: options.accept_in_use,
+            partition_offsets,
             descriptor,
             geo,
             resources,
@@ -353,12 +419,18 @@ impl Volume {
             version: inner.descriptor.version_string(),
             capacity: inner.volume.len(),
             file_block_size: inner.descriptor.file_block_size,
-            partition_offset: inner.partition_offset,
+            partition_offset: inner.partition_offsets.first().copied().unwrap_or(0),
             active_heartbeats: inner.active_heartbeats,
             descriptor: inner.descriptor.clone(),
             lvm_device: inner.volume.device_info().clone(),
+            lvm_devices: inner.volume.devices().to_vec(),
             lvm_volume: inner.volume.volume_info().clone(),
         }
+    }
+
+    /// Whether disks are opened although a host was writing to them.
+    pub(crate) fn accepts_in_use(&self) -> bool {
+        self.inner.accept_in_use
     }
 
     /// Whether structures that have not been verified against ESXi are read instead of refused.
@@ -371,10 +443,26 @@ impl Volume {
         &self.inner.volume
     }
 
-    /// Translates a volume offset into an offset on the device that was opened.
+    /// Translates a volume offset into an offset on the device that holds it. For a datastore on several devices,
+    /// [`Volume::device_location`] also says which one that is.
     pub fn device_offset(&self, volume_offset: u64) -> Result<u64> {
-        let (partition_offset, _) = self.inner.volume.translate(volume_offset)?;
-        crate::bytes::add(self.inner.partition_offset, partition_offset, "device offset")
+        Ok(self.device_location(volume_offset)?.1)
+    }
+
+    /// Translates a volume offset into a device (its position in the list the volume was opened with) and an
+    /// offset on that device.
+    pub fn device_location(&self, volume_offset: u64) -> Result<(usize, u64)> {
+        let (device, offset_in_partition, _) = self.inner.volume.translate(volume_offset)?;
+        let partition_offset = self.inner.partition_offsets.get(device).copied().unwrap_or(0);
+        Ok((
+            device,
+            crate::bytes::add(partition_offset, offset_in_partition, "device offset")?,
+        ))
+    }
+
+    /// Number of devices the datastore is stored on.
+    pub fn device_count(&self) -> usize {
+        self.inner.partition_offsets.len()
     }
 
     /// Lists a directory. `path` is relative to the datastore root; `""` or `"/"` is the root.
@@ -632,6 +720,8 @@ impl Inode {
             addressing: AddressingMode::FileBlocks,
             num_tbz_blocks: 0,
             block_offset_shift: 0,
+            lock_mode: LockMode::Free,
+            lock_owner: Uuid::default(),
             addrs: Vec::new(),
         }
     }

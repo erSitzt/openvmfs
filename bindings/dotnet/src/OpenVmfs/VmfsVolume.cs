@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Text;
 
 namespace OpenVmfs;
@@ -13,6 +14,21 @@ public sealed record VmfsOpenOptions
     /// work: data read this way may be wrong.
     /// </summary>
     public bool AcceptUnverified { get; init; }
+
+    /// <summary>
+    /// Reads the devices without the page cache of the operating system (<c>O_DIRECT</c> on Linux,
+    /// <c>FILE_FLAG_NO_BUFFERING</c> on Windows). Recommended when reading a LUN for a backup: the data is read once,
+    /// and nothing stale from an earlier state of the LUN can be served from the cache. Callers need not align
+    /// their buffers.
+    /// </summary>
+    public bool DirectIo { get; init; }
+
+    /// <summary>
+    /// Opens disks although an ESXi host had them open for writing when the image was taken, instead of failing
+    /// with <see cref="VmfsErrorKind.InUse"/>. Such a disk can lack its newest writes while later ones are present.
+    /// Only for looking at data that is known to be damaged anyway; never for a backup.
+    /// </summary>
+    public bool AcceptInUse { get; init; }
 }
 
 /// <summary>
@@ -64,9 +80,29 @@ public sealed class VmfsVolume : IDisposable
     /// LUN) or the VMFS partition itself.
     /// </summary>
     /// <exception cref="VmfsException">The volume could not be opened.</exception>
-    public static unsafe VmfsVolume Open(string devicePath, VmfsOpenOptions? options = null)
+    public static VmfsVolume Open(string devicePath, VmfsOpenOptions? options = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(devicePath);
+        return Open([devicePath], options);
+    }
+
+    /// <summary>
+    /// Opens a VMFS6 volume that is stored on several devices: a datastore that was extended onto further LUNs.
+    /// All devices of the datastore are needed, in any order.
+    /// </summary>
+    /// <exception cref="VmfsException">
+    /// The volume could not be opened. When a device is missing, the kind is
+    /// <see cref="VmfsErrorKind.InvalidInput"/> and the message names the devices as ESXi recorded them.
+    /// </exception>
+    public static unsafe VmfsVolume Open(IReadOnlyList<string> devicePaths, VmfsOpenOptions? options = null)
+    {
+        ArgumentNullException.ThrowIfNull(devicePaths);
+        ArgumentOutOfRangeException.ThrowIfZero(devicePaths.Count);
+        foreach (var devicePath in devicePaths)
+        {
+            ArgumentException.ThrowIfNullOrEmpty(devicePath);
+        }
+
         options ??= new VmfsOpenOptions();
         ArgumentOutOfRangeException.ThrowIfNegative(options.Partition);
 
@@ -78,8 +114,34 @@ public sealed class VmfsVolume : IDisposable
                 $"The native OpenVmfs library has interface version {abi}, this binding needs {Native.AbiVersion}.");
         }
 
-        var flags = options.AcceptUnverified ? Native.OpenAcceptUnverified : 0;
-        var status = Native.ovmfs_volume_open(devicePath, (uint)options.Partition, flags, out var raw, out var error);
+        var flags = (options.AcceptUnverified ? Native.OpenAcceptUnverified : 0)
+            | (options.DirectIo ? Native.OpenDirect : 0)
+            | (options.AcceptInUse ? Native.OpenAcceptInUse : 0);
+        var paths = new nint[devicePaths.Count];
+        int status;
+        nint raw;
+        nint error;
+        try
+        {
+            for (var i = 0; i < paths.Length; i++)
+            {
+                paths[i] = Marshal.StringToCoTaskMemUTF8(devicePaths[i]);
+            }
+
+            fixed (nint* first = paths)
+            {
+                status = Native.ovmfs_volume_open_devices(
+                    first, (nuint)paths.Length, (uint)options.Partition, flags, out raw, out error);
+            }
+        }
+        finally
+        {
+            foreach (var path in paths)
+            {
+                Marshal.FreeCoTaskMem(path);
+            }
+        }
+
         Native.ThrowIfFailed(status, error);
         var handle = new VolumeHandle(raw);
         try
