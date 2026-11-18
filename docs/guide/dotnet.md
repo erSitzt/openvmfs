@@ -12,8 +12,23 @@ dotnet test --solution bindings/dotnet/OpenVmfs.slnx   # needs the sample images
 ```
 
 The project copies `libopenvmfs_c.so` (and `openvmfs_c.dll`, when it was built with `tools/build-windows.sh`) next
-to the managed assembly. In your own application the native library must be where the runtime finds it: next to
-the application, or under `runtimes/<rid>/native/`.
+to the managed assembly.
+
+For your own application, build the NuGet package. It carries the native library for Linux x64 and Windows x64
+under `runtimes/<rid>/native/`, where the .NET runtime finds it on its own:
+
+```bash
+tools/pack-nuget.sh                      # target/nuget/OpenVmfs.<version>.nupkg
+```
+
+Reference it from a local package source until the package is published:
+
+```xml
+<!-- nuget.config -->
+<packageSources>
+  <add key="openvmfs-local" value="/path/to/openvmfs/target/nuget" />
+</packageSources>
+```
 
 ## Reading a disk
 
