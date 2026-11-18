@@ -45,3 +45,9 @@ A backup that silently contains wrong data is worse than no backup. Therefore:
 Fixtures are images of small datastores written by ESXi, with a manifest of what ESXi itself reported. Before a
 fixture is committed, search the image for host names, addresses and other identifiers of the environment it came
 from. Third-party sample images stay in `fixtures/external/` (git-ignored) and are never redistributed.
+
+## Tests and documentation
+
+How correctness is established, and how to run every check, is in
+[`docs/internals/testing.md`](docs/internals/testing.md). A change in behaviour comes with its test and with the
+documentation that describes it: the guides in `docs/guide/` for users, `docs/format/` for the format.

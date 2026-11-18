@@ -9,7 +9,7 @@ note records what we measured about that risk. It is evidence from a small lab, 
 | Case | Result | What OpenVmfs does |
 |---|---|---|
 | VM snapshot first, storage snapshot 0.6 to about 2 s later; read the disk **below** the VM snapshot | Correct in 9 of 9 runs | Reads it |
-| No VM snapshot; the VM was writing or had just written | **Wrong in 5 of 5 runs**: the newest 8 to 11 MiB of newly allocated data are missing, while a later write to an existing block is present | Refuses the disk (`InUse`) |
+| No VM snapshot; the VM was writing or had just written | **Wrong in 10 of 10 runs**: the newest 1 to 13 MiB of newly allocated data are missing, while a later write to an existing block is present | Refuses the disk (`InUse`) |
 | The same disk, read with the VMFS journal replayed (experimental) | Correct in 5 of 5 runs | Reads it when asked to (`replay_journal`) |
 | The delta a running VM writes to | Shows none of the recent data in 7 of 7 runs | Refuses the disk (`InUse`, and `Unsupported` for the journal flag) |
 | Files that were closed before the storage snapshot | Correct, 47 of 47 | Reads them |

@@ -56,7 +56,7 @@ A snapshot of a mounted datastore is crash-consistent at best. VMFS keeps a jour
 so metadata that was changing when the snapshot was taken may be read in an old state. We measured both sides of
 this ([`docs/consistency.md`](docs/consistency.md)):
 
-- The disk of a VM that was writing, with no VM snapshot: wrong in 5 of 5 runs. The newest 8 to 11 MiB of newly
+- The disk of a VM that was writing, with no VM snapshot: wrong in 10 of 10 runs. The newest 1 to 13 MiB of newly
   allocated data were missing while a later in-place write was present.
 - The same with a VM snapshot taken first, reading the disk below it: correct in 9 of 9 runs.
 
@@ -86,7 +86,7 @@ OPENVMFS_DIRECT=1 openvmfs vmdk export /dev/sdc vm1/vm1.vmdk vm1.raw  # without 
 ```
 
 Exit code 3 means "unsupported": the data may be fine, but the tool refuses to guess. Exit code 4 means "in use":
-an ESXi host was writing to the disk when the image was taken.
+an ESXi host was writing to the disk when the image was taken. All commands: [`docs/guide/cli.md`](docs/guide/cli.md).
 
 ## Library
 
@@ -105,16 +105,33 @@ disk.read_exact_at(0, &mut sector)?;
 Volumes, files and disks are cheap to clone and can be read from many threads at once. All metadata is resolved when
 a file is opened; a read is a lookup plus one positioned read on the device.
 
-A C interface and a .NET binding are planned (see `docs/design.md`).
+The same is available from C (`openvmfs_c`, header
+[`openvmfs.h`](crates/openvmfs-capi/include/openvmfs.h)) and from .NET (`bindings/dotnet`). Guides:
+[Rust](docs/guide/rust.md), [C](docs/guide/c.md), [.NET](docs/guide/dotnet.md).
+
+## Documentation
+
+[`docs/README.md`](docs/README.md) is the map. The main entry points:
+
+| For | Read |
+|---|---|
+| A first try | [Getting started](docs/guide/getting-started.md) |
+| Building a backup or recovery program on OpenVmfs | [Reading virtual disks for a backup](docs/guide/backup.md) |
+| Errors and refusals | [Errors and refusals](docs/guide/errors.md) |
+| Understanding VMFS | [Reading a virtual disk by hand](docs/internals/walkthrough.md), then the [format description](docs/format/00-overview.md) |
+| What a storage snapshot of a datastore in use holds | [Consistency](docs/consistency.md) |
+| Working on OpenVmfs | [Design](docs/design.md), [testing](docs/internals/testing.md), [the lab](docs/internals/lab.md) |
 
 ## Building and testing
 
 ```
 cargo build --release
-cargo test --workspace
-fixtures/fetch-external.sh          # optional: public sample images for the integration tests
-cargo test -p openvmfs-testkit
+fixtures/fetch-external.sh          # optional: public sample images for some of the tests
+cargo test --workspace --release
 ```
+
+Windows builds are cross-compiled with `tools/build-windows.sh` and tested on a Windows machine with
+`tools/windows-remote-test.py`. [`docs/internals/testing.md`](docs/internals/testing.md) describes every check.
 
 Comparing with an independent reader (needs Docker):
 

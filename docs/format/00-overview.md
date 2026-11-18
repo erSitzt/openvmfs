@@ -1,5 +1,8 @@
 # The VMFS6 on-disk format, as OpenVmfs reads it
 
+New to VMFS? Start with [the walkthrough](../internals/walkthrough.md), which follows one read through all of these
+structures, and keep [the glossary](../internals/glossary.md) at hand.
+
 VMware publishes no specification of VMFS. This description was written by reading the existing open-source
 implementations ([sources](sources.md)) and checking what they say against volumes written by ESXi. It is in our
 own words and covers what a read-only implementation needs.

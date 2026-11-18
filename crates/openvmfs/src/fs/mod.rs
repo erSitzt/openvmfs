@@ -119,6 +119,8 @@ pub struct JournalStatus {
 pub struct FileStat {
     /// Address of the file descriptor (the "inode number").
     pub addr: FdAddr,
+    /// Volume offset of the file descriptor itself.
+    pub descriptor_offset: u64,
     /// What it is.
     pub kind: FileKind,
     /// Whether it is a directory (true for directories and for system files that are directories).
@@ -157,6 +159,7 @@ impl FileStat {
     fn new(inode: &Inode) -> Self {
         FileStat {
             addr: inode.addr,
+            descriptor_offset: inode.volume_offset,
             kind: inode.kind,
             is_dir: inode.is_dir(),
             len: inode.length,
@@ -534,6 +537,18 @@ impl Volume {
     /// Metadata of a file or directory.
     pub fn stat(&self, path: &str) -> Result<FileStat> {
         Ok(FileStat::new(&self.inner.lookup(path)?))
+    }
+
+    /// The raw file descriptor of a file or directory, as it is on the volume: a lock block followed by the
+    /// metadata block with the address array (`docs/format/40-file-descriptor.md`). For studying the format.
+    pub fn read_descriptor(&self, path: &str) -> Result<Vec<u8>> {
+        let inode = self.inner.lookup(path)?;
+        read_vec(
+            &*self.inner.volume,
+            inode.volume_offset,
+            self.inner.geo.fd_size,
+            "file descriptor",
+        )
     }
 
     /// Opens a regular file or a system file for reading.

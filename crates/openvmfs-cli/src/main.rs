@@ -22,6 +22,7 @@ Usage:
   openvmfs ls <device> [path]                    list a directory
   openvmfs stat <device> <path>                  metadata of a file or directory
   openvmfs cat <device> <path>                   write a file to standard output
+  openvmfs fd <device> <path>                    write the raw file descriptor (8192 bytes) to standard output
   openvmfs map <device> <path>                   block map of a file
   openvmfs hash <device> <path>                  SHA-256 of a file
   openvmfs manifest <device> [max-bytes]         every entry with type, size and SHA-256 (files up to max-bytes,
@@ -108,6 +109,11 @@ fn run(args: &[&str]) -> CliResult {
         ["ls", device, path] => ls(device, path),
         ["stat", device, path] => stat(device, path),
         ["cat", device, path] => cat(device, path),
+        ["fd", device, path] => {
+            let raw = open(device)?.read_descriptor(path)?;
+            std::io::stdout().lock().write_all(&raw)?;
+            Ok(())
+        }
         ["map", device, path] => {
             let volume = open(device)?;
             let file = volume.open_file(path)?;
@@ -259,6 +265,17 @@ fn stat(device: &str, path: &str) -> CliResult {
     let volume = open(device)?;
     let stat = volume.stat(path)?;
     println!("address:     {} ({:#010x})", stat.addr, stat.addr.raw());
+    let (device_index, device_offset) = volume.device_location(stat.descriptor_offset)?;
+    println!(
+        "descriptor:  volume offset {:#x}, device offset {:#x}{}",
+        stat.descriptor_offset,
+        device_offset,
+        if volume.device_count() > 1 {
+            format!(" on device {}", device_index.saturating_add(1))
+        } else {
+            String::new()
+        }
+    );
     println!(
         "kind:        {:?}{}",
         stat.kind,

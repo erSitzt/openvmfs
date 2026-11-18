@@ -47,6 +47,20 @@ into runs when the disk is opened ("this range is in the delta at this file offs
 without a run belong to the layer below. A read walks the runs of the top layer and descends only for the gaps.
 `data_ranges` is computed the same way: each delta adds what it holds and removes what it declares zero.
 
+## Datastores in use: locks and journals
+
+An image of a datastore that hosts were using is a crash image. Two mechanisms deal with that:
+
+- **Locks.** Parsing a file descriptor keeps the lock mode that ESXi recorded in it. Opening a virtual disk checks
+  every file of its chain and refuses one that a host had open for writing (`ErrorKind::InUse`): its newest block
+  allocations are not in its block map yet.
+- **Journal replay**, on request. `fs/journal.rs` reads the journals that heartbeat slots point to and collects the
+  transactions that wait there: lists of byte-range changes to metadata blocks. `Replayed` is a `BlockSource` that
+  wraps the logical volume and applies those changes to whatever is read through it. The filesystem layer reads
+  through that wrapper instead of the logical volume, and nothing else changes: block maps, directories and file
+  descriptors come out as they would after ESXi's own recovery. Parsing is strict; a journal that holds anything
+  unexpected fails the open.
+
 ## Errors
 
 `Error` carries a kind and a message naming structure, field, value and offset.
@@ -58,12 +72,15 @@ without a run belong to the layer below. A read walks the runs of the top layer 
 | `Io` | The device could not be read. |
 | `NotFound`, `InvalidInput` | The request was wrong. |
 
-## Planned surfaces
+## Surfaces
 
-- **C interface** (`openvmfs_c`): opaque handles, explicit error objects, no global state.
+- **Rust crate** (`openvmfs`): the implementation. No dependencies, no `unsafe`.
+- **Command line** (`openvmfs`): a thin layer over the crate, for looking at volumes and for comparing readers.
+- **C interface** (`openvmfs_c`): opaque handles, explicit error objects, no global state, no panics across the
+  boundary. It covers volumes and virtual disks.
 - **.NET binding** (`OpenVmfs`): `VmfsVolume`, `VmdkDisk` with `Read`, `ReadAsync` and `DataExtents`, shaped so
   that a backup product's disk reader interface is a thin adapter.
-- Linux x64 first; Windows x64 must work. The core crate uses positioned reads on both.
+- Linux x64 and Windows x64, both tested. The core crate uses positioned reads on both.
 
 ## Not goals
 

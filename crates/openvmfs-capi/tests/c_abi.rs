@@ -94,3 +94,79 @@ fn a_c_program_can_use_the_library() {
     );
     assert!(stdout.starts_with("OK "), "unexpected output: {stdout}");
 }
+
+/// The example in `examples/export_disk.c` is what the C guide shows; it must keep compiling and working.
+#[test]
+fn the_c_example_exports_a_disk() {
+    if cfg!(not(target_os = "linux")) {
+        eprintln!("skipping: the C example is built on Linux only");
+        return;
+    }
+    let Some(image) = openvmfs_testkit::external_image("vmfs/vmfs6") else {
+        return;
+    };
+    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let Some(library) = find_library() else {
+        panic!("libopenvmfs_c.so was not found next to the test binary");
+    };
+    let profile_dir = library.parent().map(PathBuf::from).unwrap_or_default();
+    let program = profile_dir.join("openvmfs-c-export");
+    let compile = Command::new("cc")
+        .args(["-std=c11", "-Wall", "-Wextra", "-Werror", "-o"])
+        .arg(&program)
+        .arg(manifest.join("examples/export_disk.c"))
+        .arg("-I")
+        .arg(manifest.join("include"))
+        .arg("-L")
+        .arg(&profile_dir)
+        .arg("-lopenvmfs_c")
+        .output();
+    let compile = match compile {
+        Ok(output) => output,
+        Err(error) => {
+            eprintln!("skipping: no C compiler ({error})");
+            return;
+        }
+    };
+    assert!(
+        compile.status.success(),
+        "compiling export_disk.c failed:\n{}",
+        String::from_utf8_lossy(&compile.stderr)
+    );
+
+    // `normal.vmdk` is a thin disk of 69 GiB with one MiB of data at 42 GiB.
+    let output = profile_dir.join(format!("openvmfs-c-export-{}.raw", std::process::id()));
+    let run = Command::new(&program)
+        .arg(&image)
+        .arg("normal.vmdk")
+        .arg(&output)
+        .env("LD_LIBRARY_PATH", &profile_dir)
+        .output()
+        .unwrap();
+    assert!(
+        run.status.success(),
+        "export failed: {}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    let exported = std::fs::File::open(&output).unwrap();
+    assert_eq!(exported.metadata().unwrap().len(), 69 << 30);
+    let mut at_data = [0u8; 4096];
+    std::os::unix::fs::FileExt::read_exact_at(&exported, &mut at_data, 42 << 30).unwrap();
+    assert!(at_data.iter().any(|&byte| byte != 0));
+    let mut before = [0xFFu8; 4096];
+    std::os::unix::fs::FileExt::read_exact_at(&exported, &mut before, (42 << 30) - 4096).unwrap();
+    assert!(before.iter().all(|&byte| byte == 0));
+    drop(exported);
+    std::fs::remove_file(&output).unwrap();
+
+    // A missing disk is reported through the error object and a non-zero exit.
+    let missing = Command::new(&program)
+        .arg(&image)
+        .arg("no-such-disk.vmdk")
+        .arg(&output)
+        .env("LD_LIBRARY_PATH", &profile_dir)
+        .output()
+        .unwrap();
+    assert!(!missing.status.success());
+    assert!(String::from_utf8_lossy(&missing.stderr).contains("status 4"));
+}
