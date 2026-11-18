@@ -334,11 +334,14 @@ fn vmdk_info(device: &str, path: &str) -> CliResult {
             ""
         }
     );
-    for extent in &descriptor.extents {
-        println!(
-            "extent:       {:?} {} sectors {:?}",
-            extent.kind, extent.sectors, extent.file_name
-        );
+    for link in disk.chain() {
+        let descriptor = &link.descriptor;
+        for extent in &descriptor.extents {
+            println!(
+                "link:         {} ({}, content id {:08x}): {:?} {:?}",
+                link.descriptor_path, descriptor.create_type, descriptor.cid, extent.kind, extent.file_name
+            );
+        }
     }
     println!(
         "data:         {} bytes ({}) in {} ranges",

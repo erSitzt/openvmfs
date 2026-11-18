@@ -33,6 +33,13 @@ System files can depend on each other. They are opened in rounds: whatever can b
 far is resolved, and a round without progress is an error. This replaces the fixed opening order that older tools
 get wrong on some volumes.
 
+## Virtual disks are stacks of layers
+
+A `Disk` is the base disk's flat file plus one layer per snapshot delta, newest first. A delta's tables are resolved
+into runs when the disk is opened ("this range is in the delta at this file offset", "this range is zero"); ranges
+without a run belong to the layer below. A read walks the runs of the top layer and descends only for the gaps.
+`data_ranges` is computed the same way: each delta adds what it holds and removes what it declares zero.
+
 ## Errors
 
 `Error` carries a kind and a message naming structure, field, value and offset.

@@ -33,7 +33,7 @@ by ESXi that holds reference data whose position is known.
 
 | # | Question |
 |---|---|
-| 16 | SESparse entries of type 1: zeros or parent? |
+| 16 | SESparse zero grains (type 2): when does ESXi write them? Refused until seen. |
 | 17 | How ESXi escapes a double quote in an extent file name. |
 | 18 | The exact descriptor lines of an encrypted disk. |
 
@@ -49,3 +49,4 @@ by ESXi that holds reference data whose position is known.
 | How can eight bits mark 512 MiB as never written? | They do not have to: every per-MiB entry has its own bit 7. | `fixture-lfb-v1`, disk `lfb-lazy` |
 | When does ESXi use large file blocks? | For thick disks, on datastores large enough: ESXi set aside up to 256 large blocks (128 GiB) for small-block clusters, so the 4 and 16 GiB datastores had none to give. | `vmkfstools -Ph` and `-D` on 4, 16 and 256 GiB datastores |
 | Do writes from a guest leave the same metadata as writes from the ESXi shell? | Yes, for thin and lazy-zeroed disks written through a paravirtual SCSI controller: holes, per-MiB "to be zeroed" marks and the zeroing of a partly written MiB are the same. | `fixture-guest-v1` |
+| How does a range read that the guest discarded after a snapshot (SESparse type 1)? | As zeros, not from the parent. ESXi's consolidation and QEMU agree. | `fixture-chain-v2` |

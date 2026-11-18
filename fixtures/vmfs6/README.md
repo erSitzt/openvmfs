@@ -133,7 +133,7 @@ What it showed: guest writes leave the same metadata as writes from the ESXi she
 VM runs reads identical to what ESXi reads afterwards. Under the never-written blocks of `lazy-g` the device holds
 junk.
 
-## fixture-chain-v1 (input for snapshot chains, not used by tests yet)
+## fixture-chain-v1
 
 The same datastore after the second consistency probe (`docs/consistency.md`): the guest VM is powered off and has
 one VM snapshot, so every disk in `guest/` is a base (`x.vmdk`, `x-flat.vmdk`) plus a SESparse delta
@@ -151,3 +151,22 @@ one VM snapshot, so every disk in `guest/` is a base (`x.vmdk`, `x-flat.vmdk`) p
 ## probe-crash2
 
 `probe-crash2/esxi.txt`: what ESXi reported about the base disk in the second consistency probe.
+
+## fixture-chain-v2
+
+The same datastore after a guest session with two more VM snapshots and discards (`blkdiscard`) in between.
+Partial image: only what the tests read.
+
+`guest/thin-g` now has three deltas. What the guest did (offsets in MiB; the base holds data at 0, 10 and 48):
+
+| Level | Written | Discarded |
+|---|---|---|
+| `thin-g-000001` | 20, 21 | 10 (data in the base), 100–101 (never written), 21 (just written) |
+| `thin-g-000002` | 8 sectors at sector 20544 (inside the discarded MiB 10), 30 | 20 (written one level below) |
+| `thin-g-000003` | 8 sectors at 0 | |
+
+`guest/grow` got two more, empty deltas.
+
+`fixture-chain-v2/truth/`: `sha256.txt` with the base, the clones ESXi consolidated from each level
+(`clone/thin-g-at1..3`) and the delta files; the descriptors; `thin-g-atN.t0.txt` with ESXi's block map of each
+clone. `qemu-img convert` (7.2) produces the same content as ESXi at all three levels.

@@ -74,12 +74,13 @@ returns the data extents of the flat file; holes and "to be zeroed" ranges read 
 
 ## What OpenVmfs opens
 
-A descriptor with `version` 1 or 3, UTF-8 encoding, no parent, exactly one extent of type `VMFS` with offset 0,
-whose file is a regular file next to the descriptor and exactly `sectors × 512` bytes long.
+A descriptor with `version` 1 or 3, UTF-8 encoding and exactly one extent with offset 0: either a base disk (type
+`VMFS`, no parent, flat file exactly `sectors × 512` bytes long) or a snapshot link (type `SESPARSE` with a parent),
+which is followed down to its base ([80-sesparse.md](80-sesparse.md)).
 
 Refused as unsupported, each with its own message:
 
-- snapshot links (a parent content id or a parent hint), `SESPARSE` and `VMFSSPARSE` extents;
+- `VMFSSPARSE` extents (the older COWD delta format) and chains that leave the datastore;
 - raw device mappings (`VMFSRDM`, `VMFSRAW`); the mapping file itself is a file of type 6 without block addresses;
 - `ddb.iofilters`, `ddb.sidecars` or keys naming encryption: the disk passes through an I/O filter, for example
   VM encryption (`vmwarevmcrypt`), and its content is not readable **[1]**;
@@ -100,4 +101,5 @@ The `-ctk.vmdk` file has no public format description. Incremental backups get t
 After "VM snapshot, then array snapshot", the array snapshot contains the base disk, any older deltas, and a new
 active delta. The backup wants the disk as it was when the VM snapshot was taken: the chain **below** the active
 delta. For a VM without earlier snapshots that is the base descriptor, which OpenVmfs can read today. For a VM with
-earlier snapshots it is a chain of SESparse deltas ([80-sesparse.md](80-sesparse.md)).
+earlier snapshots it is a chain of SESparse deltas ([80-sesparse.md](80-sesparse.md)), which OpenVmfs reads when
+given the descriptor that was current before the backup's own snapshot.

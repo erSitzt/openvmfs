@@ -1,0 +1,15 @@
+# Disk DescriptorFile
+version=1
+encoding="UTF-8"
+CID=58c00d76
+parentCID=a063edd0
+createType="seSparse"
+parentFileNameHint="thin-g-000001.vmdk"
+# Extent description
+RW 524288 SESPARSE "thin-g-000002-sesparse.vmdk"
+
+# The Disk Data Base 
+#DDB
+
+ddb.grain = "8"
+ddb.longContentID = "af6759ea706756532018179458c00d76"

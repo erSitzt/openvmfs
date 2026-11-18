@@ -1,0 +1,47 @@
+clone:
+total 12416
+drwxr-xr-x    1 root     root         73728 Nov 18 20:57 .
+drwxr-xr-t    1 root     root         73728 Nov 18 20:57 ..
+-rw-------    1 root     root     268435456 Nov 18 20:57 thin-g-at1-flat.vmdk
+-rw-------    1 root     root           511 Nov 18 20:57 thin-g-at1.vmdk
+-rw-------    1 root     root     268435456 Nov 18 20:57 thin-g-at2-flat.vmdk
+-rw-------    1 root     root           511 Nov 18 20:57 thin-g-at2.vmdk
+-rw-------    1 root     root     268435456 Nov 18 20:57 thin-g-at3-flat.vmdk
+-rw-------    1 root     root           511 Nov 18 20:57 thin-g-at3.vmdk
+
+guest:
+total 682112
+drwxr-xr-x    1 root     root         81920 Nov 18 20:56 .
+drwxr-xr-t    1 root     root         73728 Nov 18 20:57 ..
+-rw-------    1 root     root     248512512 Nov 18 20:56 grow-000001-sesparse.vmdk
+-rw-------    1 root     root           302 Nov 18 20:19 grow-000001.vmdk
+-rw-------    1 root     root       6291456 Nov 18 20:56 grow-000002-sesparse.vmdk
+-rw-------    1 root     root           309 Nov 18 20:56 grow-000002.vmdk
+-rw-------    1 root     root       6291456 Nov 18 20:56 grow-000003-sesparse.vmdk
+-rw-------    1 root     root           309 Nov 18 20:56 grow-000003.vmdk
+-rw-------    1 root     root     419430400 Nov 18 20:19 grow-flat.vmdk
+-rw-------    1 root     root           466 Nov 18 20:19 grow.vmdk
+-rw-------    1 root     root       6291456 Nov 18 20:56 lazy-g-000001-sesparse.vmdk
+-rw-------    1 root     root           306 Nov 18 20:19 lazy-g-000001.vmdk
+-rw-------    1 root     root       6291456 Nov 18 20:56 lazy-g-000002-sesparse.vmdk
+-rw-------    1 root     root           313 Nov 18 20:56 lazy-g-000002.vmdk
+-rw-------    1 root     root       6291456 Nov 18 20:56 lazy-g-000003-sesparse.vmdk
+-rw-------    1 root     root           313 Nov 18 20:56 lazy-g-000003.vmdk
+-rw-------    1 root     root     134217728 Nov 18 20:06 lazy-g-flat.vmdk
+-rw-------    1 root     root           442 Nov 18 20:05 lazy-g.vmdk
+-rw-------    1 root     root       6291456 Nov 18 20:56 src-000001-sesparse.vmdk
+-rw-------    1 root     root           300 Nov 18 20:19 src-000001.vmdk
+-rw-------    1 root     root       6291456 Nov 18 20:56 src-000002-sesparse.vmdk
+-rw-------    1 root     root           307 Nov 18 20:56 src-000002.vmdk
+-rw-------    1 root     root       6291456 Nov 18 20:56 src-000003-sesparse.vmdk
+-rw-------    1 root     root           307 Nov 18 20:56 src-000003.vmdk
+-rw-------    1 root     root      67108864 Nov 18 20:04 src-flat.vmdk
+-rw-------    1 root     root           464 Nov 18 20:04 src.vmdk
+-rw-------    1 root     root      23592960 Nov 18 20:56 thin-g-000001-sesparse.vmdk
+-rw-------    1 root     root           306 Nov 18 20:56 thin-g-000001.vmdk
+-rw-------    1 root     root      23072768 Nov 18 20:56 thin-g-000002-sesparse.vmdk
+-rw-------    1 root     root           313 Nov 18 20:56 thin-g-000002.vmdk
+-rw-------    1 root     root      23072768 Nov 18 20:56 thin-g-000003-sesparse.vmdk
+-rw-------    1 root     root           313 Nov 18 20:56 thin-g-000003.vmdk
+-rw-------    1 root     root     268435456 Nov 18 20:06 thin-g-flat.vmdk
+-rw-------    1 root     root           468 Nov 18 20:05 thin-g.vmdk

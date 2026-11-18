@@ -49,7 +49,7 @@ pub struct OpenOptions {
     pub partition: Option<u32>,
     /// Read structures whose interpretation is known from other implementations but has not been verified against
     /// data written by ESXi, instead of refusing them with [`ErrorKind::Unsupported`]. Currently: "to be zeroed"
-    /// bitmaps other than the one ESXi was seen to write.
+    /// bitmaps other than the one ESXi was seen to write, and zero grains in snapshot deltas.
     ///
     /// Meant for verification work. Data read this way may be wrong.
     pub accept_unverified: bool,
@@ -359,6 +359,11 @@ impl Volume {
             lvm_device: inner.volume.device_info().clone(),
             lvm_volume: inner.volume.volume_info().clone(),
         }
+    }
+
+    /// Whether structures that have not been verified against ESXi are read instead of refused.
+    pub(crate) fn accepts_unverified(&self) -> bool {
+        self.inner.geo.accept_unverified
     }
 
     /// The logical volume as a block source (volume offsets).

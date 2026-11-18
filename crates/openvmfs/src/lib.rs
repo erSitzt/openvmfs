@@ -50,7 +50,7 @@ use std::fmt;
 pub use error::{Error, ErrorKind, Result};
 pub use fs::{DirEntry, Extent, ExtentKind, File, FileKind, FileStat, OpenOptions, Volume, VolumeInfo};
 pub use io::{BlockSource, FileSource, MemorySource, SubSource};
-pub use vmdk::Disk;
+pub use vmdk::{ChainLink, Disk};
 
 /// A VMFS UUID: creation time, a random part and the MAC address of the host that created the object.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Default)]

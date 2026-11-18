@@ -19,6 +19,9 @@ against the hashes and block maps ESXi itself reports, and file by file against 
 - Files of every size class: stored inside the descriptor, in sub-blocks, in file blocks, and through one or two
   levels of pointer blocks (tested up to a 42 TiB thin disk).
 - Directories, including names with non-ASCII characters; symbolic links; system files.
+- Snapshot chains: a disk with VM snapshots is read through its SESparse deltas down to the base, at any
+  snapshot level, including ranges the guest discarded (checked against ESXi's own consolidation of each level,
+  and against QEMU).
 - Base disks, thin and thick: `disk.vmdk` descriptor plus `disk-flat.vmdk`, with the list of ranges that hold
   data. Blocks of a lazy-zeroed disk that were never written read as zeros, although stale data is on disk there
   (checked against datastores that were filled with junk first, and against ESXi's own hashes and block maps).
@@ -33,7 +36,8 @@ has another way to read the data should fall back to it.
 | Refused | Why |
 |---|---|
 | "To be zeroed" markers other than the one ESXi was seen to write | Never seen |
-| Snapshot chains (SESparse deltas) | Planned next |
+| A snapshot delta that was not closed cleanly (the active delta of a running VM) | Its journal would have to be replayed |
+| Zero grains in snapshot deltas, deltas in the older COWD format, chains across datastores | Never seen, or not created by VMFS6 |
 | Volumes spanning several devices, volumes over 16 TiB | Planned |
 | VMFS5, VMFS-L, VMFS 6.81, 4Kn devices | No verified sample yet |
 | Raw device mappings, encrypted disks | The data is not on the volume, or not readable |
@@ -58,6 +62,7 @@ openvmfs ls     /dev/mapper/snapshot-lun vm1
 openvmfs vmdk info   /dev/mapper/snapshot-lun vm1/vm1.vmdk
 openvmfs vmdk map    /dev/mapper/snapshot-lun vm1/vm1.vmdk
 openvmfs vmdk export /dev/mapper/snapshot-lun vm1/vm1.vmdk vm1.raw
+openvmfs vmdk info   /dev/mapper/snapshot-lun vm1/vm1-000002.vmdk    # the disk as of a snapshot
 ```
 
 Exit code 3 means "unsupported": the data may be fine, but the tool refuses to guess.
