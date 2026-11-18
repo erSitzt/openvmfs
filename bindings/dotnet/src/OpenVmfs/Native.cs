@@ -8,7 +8,7 @@ internal static unsafe partial class Native
     private const string Library = "openvmfs_c";
 
     /// <summary>The interface version this binding was written for.</summary>
-    internal const uint AbiVersion = 2;
+    internal const uint AbiVersion = 3;
 
     internal const uint OpenAcceptUnverified = 1;
     internal const uint OpenDirect = 2;
@@ -44,6 +44,17 @@ internal static unsafe partial class Native
     internal static partial int ovmfs_volume_open_devices(nint* devicePaths, nuint deviceCount, uint partition, uint flags, out nint volume, out nint error);
 
     [LibraryImport(Library)]
+    internal static partial int ovmfs_volume_open_device(
+        delegate* unmanaged[Cdecl]<nint, ulong, byte*, nuint, int> read,
+        delegate* unmanaged[Cdecl]<nint, void> release,
+        nint context,
+        ulong size,
+        uint partition,
+        uint flags,
+        out nint volume,
+        out nint error);
+
+    [LibraryImport(Library)]
     internal static partial void ovmfs_volume_close(nint volume);
 
     [LibraryImport(Library)]
@@ -74,7 +85,10 @@ internal static unsafe partial class Native
     internal static partial void ovmfs_error_free(nint error);
 
     /// <summary>Turns a failed status into an exception and frees the native error object.</summary>
-    internal static void ThrowIfFailed(int status, nint error)
+    /// <param name="status">The status the native call returned.</param>
+    /// <param name="error">The native error object, or 0.</param>
+    /// <param name="bridge">The caller's device, if the volume is read through one: its exception is attached.</param>
+    internal static void ThrowIfFailed(int status, nint error, DeviceBridge? bridge = null)
     {
         if (status == 0)
         {
@@ -88,7 +102,7 @@ internal static unsafe partial class Native
             ovmfs_error_free(error);
         }
 
-        throw new VmfsException((VmfsErrorKind)status, message);
+        throw new VmfsException((VmfsErrorKind)status, message, bridge?.TakeLastError());
     }
 }
 

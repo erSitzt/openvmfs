@@ -38,6 +38,10 @@ public sealed class VmfsException : Exception
     /// <summary>Creates the exception.</summary>
     public VmfsException(VmfsErrorKind kind, string message) : base(message) => Kind = kind;
 
+    /// <summary>Creates the exception with the exception that a caller-supplied device threw.</summary>
+    public VmfsException(VmfsErrorKind kind, string message, Exception? innerException)
+        : base(message, innerException) => Kind = kind;
+
     /// <summary>The kind of error.</summary>
     public VmfsErrorKind Kind { get; }
 }

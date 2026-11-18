@@ -759,14 +759,14 @@ fn check_file_block_layout(volume: &dyn BlockSource, geo: &Geometry, resources: 
 
 fn count_active_heartbeats(volume: &dyn BlockSource, geo: &Geometry) -> Result<u32> {
     let slot_size = geo.md_alignment;
+    // One read for the whole region: on a device behind a network, a thousand small reads would take seconds.
+    let region = HEARTBEAT_SLOTS
+        .saturating_mul(slot_size)
+        .min(volume.len().saturating_sub(HEARTBEAT_OFFSET.min(volume.len())));
+    let raw = read_vec(volume, HEARTBEAT_OFFSET, region, "heartbeat region")?;
     let mut active = 0u32;
-    for slot in 0..HEARTBEAT_SLOTS {
-        let offset = HEARTBEAT_OFFSET.saturating_add(slot.saturating_mul(slot_size));
-        if offset.saturating_add(4) > volume.len() {
-            break;
-        }
-        let raw = read_vec(volume, offset, 4, "heartbeat slot")?;
-        let state = View::new("heartbeat slot", offset, &raw).u32(0)?;
+    for slot in raw.chunks_exact(to_usize(slot_size, "heartbeat slot size")?) {
+        let state = View::new("heartbeat slot", HEARTBEAT_OFFSET, slot).u32(0)?;
         if state != HEARTBEAT_FREE && state != 0 {
             active = active.saturating_add(1);
         }

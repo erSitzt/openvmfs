@@ -44,10 +44,12 @@ public sealed record VmfsOpenOptions
 public sealed class VmfsVolume : IDisposable
 {
     private readonly VolumeHandle _handle;
+    private readonly DeviceBridge? _bridge;
 
-    private VmfsVolume(VolumeHandle handle, Native.VolumeInfo info, string label, string uuid)
+    private VmfsVolume(VolumeHandle handle, Native.VolumeInfo info, string label, string uuid, DeviceBridge? bridge)
     {
         _handle = handle;
+        _bridge = bridge;
         Label = label;
         Uuid = uuid;
         Version = $"6.{info.MinorVersion}";
@@ -113,18 +115,8 @@ public sealed class VmfsVolume : IDisposable
         options ??= new VmfsOpenOptions();
         ArgumentOutOfRangeException.ThrowIfNegative(options.Partition);
 
-        var abi = Native.ovmfs_abi_version();
-        if (abi != Native.AbiVersion)
-        {
-            throw new VmfsException(
-                VmfsErrorKind.Internal,
-                $"The native OpenVmfs library has interface version {abi}, this binding needs {Native.AbiVersion}.");
-        }
-
-        var flags = (options.AcceptUnverified ? Native.OpenAcceptUnverified : 0)
-            | (options.DirectIo ? Native.OpenDirect : 0)
-            | (options.AcceptInUse ? Native.OpenAcceptInUse : 0)
-            | (options.ReplayJournal ? Native.OpenReplayJournal : 0);
+        CheckInterfaceVersion();
+        var flags = Flags(options);
         var paths = new nint[devicePaths.Count];
         int status;
         nint raw;
@@ -151,13 +143,63 @@ public sealed class VmfsVolume : IDisposable
         }
 
         Native.ThrowIfFailed(status, error);
+        return Wrap(raw, null);
+    }
+
+    /// <summary>
+    /// Opens the VMFS6 volume on a device that is read through <paramref name="device"/>: for devices that are not
+    /// a path, such as a LUN reached through a tunnel, or an image in memory.
+    /// </summary>
+    /// <remarks>
+    /// The device is used until the volume and every disk opened from it have been disposed.
+    /// <see cref="VmfsOpenOptions.DirectIo"/> has no effect here. When the device throws, the
+    /// <see cref="VmfsException"/> that results carries that exception as its inner exception.
+    /// </remarks>
+    /// <exception cref="VmfsException">The volume could not be opened.</exception>
+    public static unsafe VmfsVolume Open(IVmfsDevice device, VmfsOpenOptions? options = null)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        options ??= new VmfsOpenOptions();
+        ArgumentOutOfRangeException.ThrowIfNegative(options.Partition);
+        CheckInterfaceVersion();
+        var length = device.Length;
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(length, nameof(device));
+
+        var (bridge, context) = DeviceBridge.Create(device);
+        // From here on the native side owns the context and releases it, also when the open fails.
+        var status = Native.ovmfs_volume_open_device(
+            DeviceBridge.ReadFunction, DeviceBridge.ReleaseFunction, context, (ulong)length, (uint)options.Partition,
+            Flags(options), out var raw, out var error);
+        Native.ThrowIfFailed(status, error, bridge);
+        return Wrap(raw, bridge);
+    }
+
+    private static uint Flags(VmfsOpenOptions options) =>
+        (options.AcceptUnverified ? Native.OpenAcceptUnverified : 0)
+        | (options.DirectIo ? Native.OpenDirect : 0)
+        | (options.AcceptInUse ? Native.OpenAcceptInUse : 0)
+        | (options.ReplayJournal ? Native.OpenReplayJournal : 0);
+
+    private static void CheckInterfaceVersion()
+    {
+        var abi = Native.ovmfs_abi_version();
+        if (abi != Native.AbiVersion)
+        {
+            throw new VmfsException(
+                VmfsErrorKind.Internal,
+                $"The native OpenVmfs library has interface version {abi}, this binding needs {Native.AbiVersion}.");
+        }
+    }
+
+    private static unsafe VmfsVolume Wrap(nint raw, DeviceBridge? bridge)
+    {
         var handle = new VolumeHandle(raw);
         try
         {
-            status = Native.ovmfs_volume_get_info(handle, out var info, out error);
-            Native.ThrowIfFailed(status, error);
+            var status = Native.ovmfs_volume_get_info(handle, out var info, out var error);
+            Native.ThrowIfFailed(status, error, bridge);
             var label = ReadText(new ReadOnlySpan<byte>(info.Label, 129));
-            return new VmfsVolume(handle, info, label, FormatUuid(new ReadOnlySpan<byte>(info.Uuid, 16)));
+            return new VmfsVolume(handle, info, label, FormatUuid(new ReadOnlySpan<byte>(info.Uuid, 16)), bridge);
         }
         catch
         {
@@ -172,14 +214,15 @@ public sealed class VmfsVolume : IDisposable
     /// </summary>
     /// <exception cref="VmfsException">
     /// The disk could not be opened. <see cref="VmfsErrorKind.Unsupported"/> means the disk may be fine but uses
-    /// something that is refused (a snapshot chain, a raw device mapping, encryption, an unverified layout).
+    /// something that is refused (a raw device mapping, encryption, an unverified layout);
+    /// <see cref="VmfsErrorKind.InUse"/> means a host was writing to it when the image was taken.
     /// </exception>
     public VmdkDisk OpenDisk(string descriptorPath)
     {
         ArgumentException.ThrowIfNullOrEmpty(descriptorPath);
         var status = Native.ovmfs_disk_open(_handle, descriptorPath, out var raw, out var error);
-        Native.ThrowIfFailed(status, error);
-        return new VmdkDisk(new DiskHandle(raw));
+        Native.ThrowIfFailed(status, error, _bridge);
+        return new VmdkDisk(new DiskHandle(raw), _bridge);
     }
 
     /// <summary>Closes the volume. Disks opened from it stay usable.</summary>

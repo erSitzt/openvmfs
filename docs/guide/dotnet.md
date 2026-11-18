@@ -57,14 +57,30 @@ A datastore on several devices:
 using var volume = VmfsVolume.Open(["/dev/sdc", "/dev/sdd"]);
 ```
 
+A device that is not a path, such as a LUN reached through a tunnel or an image in memory, is read through your own
+code: implement `IVmfsDevice` (`Length` and `Read(offset, Span<byte>)`, callable from several threads at once) and
+pass it to `VmfsVolume.Open`. The device is used until the volume and every disk opened from it are disposed. What
+your `Read` throws arrives as the `InnerException` of a `VmfsException` of kind `Io`.
+
+```csharp
+sealed class TunnelDevice(Tunnel tunnel) : IVmfsDevice
+{
+    public long Length => tunnel.Size;
+    public void Read(long offset, Span<byte> destination) => tunnel.ReadExactly(offset, destination);
+}
+
+using var volume = VmfsVolume.Open(new TunnelDevice(tunnel));
+```
+
 ## The types
 
 | Type | Members |
 |---|---|
-| `VmfsVolume` | `Open(path, options)`, `Open(paths, options)`, `OpenDisk(descriptorPath)`, `Label`, `Uuid`, `Version`, `Capacity`, `FileBlockSize`, `PartitionOffset`, `ActiveHeartbeats` |
+| `VmfsVolume` | `Open(path, options)`, `Open(paths, options)`, `Open(device, options)`, `OpenDisk(descriptorPath)`, `Label`, `Uuid`, `Version`, `Capacity`, `FileBlockSize`, `PartitionOffset`, `ActiveHeartbeats` |
 | `VmfsOpenOptions` | `Partition`, `DirectIo`, `ReplayJournal`, `AcceptInUse`, `AcceptUnverified` |
 | `VmdkDisk` | `Capacity`, `DataExtents`, `Read(offset, Span<byte>)`, `ReadAsync(offset, Memory<byte>, cancellationToken)` |
 | `DataExtent` | `Offset`, `Length`, `End` |
+| `IVmfsDevice` | `Length`, `Read(offset, Span<byte>)`: a device read through your code |
 | `VmfsException` | `Kind` (`VmfsErrorKind`), `Message` |
 
 ## Behaviour worth knowing

@@ -24,7 +24,7 @@
 extern "C" {
 #endif
 
-#define OVMFS_ABI_VERSION 2
+#define OVMFS_ABI_VERSION 3
 
 #define OVMFS_OK 0
 #define OVMFS_ERR_IO 1            /* the device could not be read */
@@ -85,6 +85,23 @@ int32_t ovmfs_volume_open(const char *device_path, uint32_t partition, uint32_t 
  */
 int32_t ovmfs_volume_open_devices(const char *const *device_paths, size_t device_count, uint32_t partition,
                                   uint32_t flags, ovmfs_volume **out_volume, ovmfs_error **out_error);
+
+/*
+ * A device that is not a path: the library reads it through a function of the caller. Useful for a LUN that is
+ * reached through a tunnel, for an image in memory, or for tests.
+ *
+ * ovmfs_read_fn fills buffer with length bytes at offset and returns 0, or returns anything else on failure. It is
+ * called from whatever thread uses the volume or its disks, from several at once.
+ * ovmfs_release_fn, if not NULL, is called exactly once when the library no longer uses the device: when the open
+ * fails, or when the volume and every disk opened from it have been closed. (If read is NULL, nothing is called.)
+ * size is the size of the device in bytes. OVMFS_OPEN_DIRECT has no effect here.
+ */
+typedef int32_t (*ovmfs_read_fn)(void *context, uint64_t offset, uint8_t *buffer, size_t length);
+typedef void (*ovmfs_release_fn)(void *context);
+int32_t ovmfs_volume_open_device(ovmfs_read_fn read, ovmfs_release_fn release, void *context, uint64_t size,
+                                 uint32_t partition, uint32_t flags, ovmfs_volume **out_volume,
+                                 ovmfs_error **out_error);
+
 void ovmfs_volume_close(ovmfs_volume *volume);
 int32_t ovmfs_volume_get_info(const ovmfs_volume *volume, ovmfs_volume_info *out_info, ovmfs_error **out_error);
 

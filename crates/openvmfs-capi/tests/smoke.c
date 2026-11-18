@@ -13,6 +13,69 @@
         }                                                                     \
     } while (0)
 
+/* A device behind a read function: here simply a file, with counters to check the contract. */
+struct file_device {
+    FILE *file;
+    int reads;
+    int released;
+    int fail;
+};
+
+static int32_t file_read(void *context, uint64_t offset, uint8_t *buffer, size_t length) {
+    struct file_device *device = context;
+    device->reads++;
+    if (device->fail) return 5;
+    if (fseek(device->file, (long)offset, SEEK_SET) != 0) return 1;
+    return fread(buffer, 1, length, device->file) == length ? 0 : 2;
+}
+
+static void file_release(void *context) {
+    ((struct file_device *)context)->released++;
+}
+
+static int check_caller_supplied_device(const char *image) {
+    struct file_device device = {fopen(image, "rb"), 0, 0, 0};
+    CHECK(device.file != NULL);
+    CHECK(fseek(device.file, 0, SEEK_END) == 0);
+    uint64_t size = (uint64_t)ftell(device.file);
+
+    ovmfs_error *error = NULL;
+    ovmfs_volume *volume = NULL;
+    CHECK(ovmfs_volume_open_device(file_read, file_release, &device, size, 0, 0, &volume, &error) == OVMFS_OK);
+    CHECK(device.reads > 0 && device.released == 0);
+    ovmfs_volume_info info;
+    CHECK(ovmfs_volume_get_info(volume, &info, &error) == OVMFS_OK);
+    CHECK(strcmp((const char *)info.label, "vmfs6") == 0);
+
+    ovmfs_disk *disk = NULL;
+    CHECK(ovmfs_disk_open(volume, "normal.vmdk", &disk, &error) == OVMFS_OK);
+    /* The device is still needed by the disk after the volume is closed ... */
+    ovmfs_volume_close(volume);
+    CHECK(device.released == 0);
+    uint8_t sector[512];
+    ovmfs_range range;
+    CHECK(ovmfs_disk_data_ranges(disk, &range, 1) == 1);
+    CHECK(ovmfs_disk_read(disk, range.offset, sector, sizeof sector, &error) == OVMFS_OK);
+    /* ... a failing read function becomes an I/O error ... */
+    device.fail = 1;
+    CHECK(ovmfs_disk_read(disk, range.offset, sector, sizeof sector, &error) == OVMFS_ERR_IO);
+    CHECK(strstr(ovmfs_error_message(error), "status 5") != NULL);
+    ovmfs_error_free(error);
+    error = NULL;
+    /* ... and it is released exactly once, when the last handle goes. */
+    ovmfs_disk_close(disk);
+    CHECK(device.released == 1);
+
+    /* A failed open releases the device too. */
+    device.released = 0;
+    CHECK(ovmfs_volume_open_device(file_read, file_release, &device, size, 0, 0, &volume, NULL) == OVMFS_ERR_IO);
+    CHECK(volume == NULL && device.released == 1);
+    CHECK(ovmfs_volume_open_device(NULL, file_release, &device, size, 0, 0, &volume, NULL) == OVMFS_ERR_INVALID_INPUT);
+    CHECK(device.released == 1);
+    fclose(device.file);
+    return 0;
+}
+
 int main(int argc, char **argv) {
     if (argc != 2) return 2;
     CHECK(ovmfs_abi_version() == OVMFS_ABI_VERSION);
@@ -89,6 +152,7 @@ int main(int argc, char **argv) {
     ovmfs_disk_close(NULL);
     ovmfs_volume_close(NULL);
     ovmfs_error_free(NULL);
+    CHECK(check_caller_supplied_device(argv[1]) == 0);
     printf("OK data-byte-sum=%llu\n", sum);
     return 0;
 }

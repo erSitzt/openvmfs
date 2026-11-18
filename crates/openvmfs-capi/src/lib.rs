@@ -9,13 +9,14 @@
 //! - Read functions may be called from many threads at once on the same handle.
 //! - No panic crosses the boundary: each entry point catches panics and reports them as `OVMFS_ERR_INTERNAL`.
 
-use std::ffi::{c_char, CStr, CString};
+use std::ffi::{c_char, c_void, CStr, CString};
 use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::sync::Arc;
 
 use openvmfs::{BlockSource, Disk, Error, ErrorKind, OpenOptions, Volume};
 
 /// Version of this interface. Changes when a function or structure changes incompatibly.
-pub const OVMFS_ABI_VERSION: u32 = 2;
+pub const OVMFS_ABI_VERSION: u32 = 3;
 
 /// Status codes. Zero is success.
 pub const OVMFS_OK: i32 = 0;
@@ -257,6 +258,136 @@ pub unsafe extern "C" fn ovmfs_volume_open_devices(
                 replay_journal: flags & OVMFS_OPEN_REPLAY_JOURNAL != 0,
             };
             let volume = Volume::open_paths(&paths, &options)?;
+            out_volume.write(Box::into_raw(Box::new(ovmfs_volume(volume))));
+            Ok(())
+        })
+    }
+}
+
+/// Reads `length` bytes at `offset` of the caller's device into `buffer`. Returns 0 on success.
+#[allow(non_camel_case_types)]
+pub type ovmfs_read_fn = unsafe extern "C" fn(context: *mut c_void, offset: u64, buffer: *mut u8, length: usize) -> i32;
+/// Tells the caller that the library no longer uses the device.
+#[allow(non_camel_case_types)]
+pub type ovmfs_release_fn = unsafe extern "C" fn(context: *mut c_void);
+
+/// A device that is read through a function of the caller.
+struct CallbackSource {
+    read: ovmfs_read_fn,
+    release: Option<ovmfs_release_fn>,
+    context: *mut c_void,
+    len: u64,
+}
+
+// SAFETY: the caller of `ovmfs_volume_open_device` promises that `read` may be called from any thread, from several
+// at once, and that `context` stays valid until `release` is called.
+unsafe impl Send for CallbackSource {}
+// SAFETY: see above.
+unsafe impl Sync for CallbackSource {}
+
+impl std::fmt::Debug for CallbackSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "CallbackSource({} bytes)", self.len)
+    }
+}
+
+impl Drop for CallbackSource {
+    fn drop(&mut self) {
+        if let Some(release) = self.release {
+            // SAFETY: the caller's function with the caller's context, called once.
+            unsafe { release(self.context) };
+        }
+    }
+}
+
+impl BlockSource for CallbackSource {
+    fn len(&self) -> u64 {
+        self.len
+    }
+
+    fn read_exact_at(&self, offset: u64, buf: &mut [u8]) -> Result<(), Error> {
+        match offset.checked_add(buf.len() as u64) {
+            Some(end) if end <= self.len => {}
+            _ => {
+                return Err(Error::corrupt(format!(
+                    "read of {} bytes at {offset:#x} goes beyond the end of the device ({:#x} bytes)",
+                    buf.len(),
+                    self.len
+                )));
+            }
+        }
+        if buf.is_empty() {
+            return Ok(());
+        }
+        // SAFETY: `buf` is valid for writing `buf.len()` bytes; the caller's function and context are valid until
+        // `release` is called, which happens only when this object is dropped.
+        let status = unsafe { (self.read)(self.context, offset, buf.as_mut_ptr(), buf.len()) };
+        if status == 0 {
+            Ok(())
+        } else {
+            Err(Error::new(
+                ErrorKind::Io,
+                format!(
+                    "the caller's read function failed with status {status} for {} bytes at {offset:#x}",
+                    buf.len()
+                ),
+            ))
+        }
+    }
+}
+
+/// Opens the VMFS6 volume on a device that is read through a function of the caller: for devices that are not a
+/// path, such as a LUN reached through a tunnel, or an image in memory.
+///
+/// `release`, if not null, is called exactly once when the library no longer uses the device: when this call
+/// fails, or when the volume and every disk opened from it have been closed.
+///
+/// # Safety
+/// `read` must be callable from any thread and from several threads at once until `release` has been called.
+/// `out_volume` must be valid for writing one pointer. `out_error` must be null or valid for writing one pointer.
+#[no_mangle]
+pub unsafe extern "C" fn ovmfs_volume_open_device(
+    read: Option<ovmfs_read_fn>,
+    release: Option<ovmfs_release_fn>,
+    context: *mut c_void,
+    size: u64,
+    partition: u32,
+    flags: u32,
+    out_volume: *mut *mut ovmfs_volume,
+    out_error: *mut *mut ovmfs_error,
+) -> i32 {
+    // SAFETY: forwarded caller guarantees; see the function's safety section.
+    unsafe {
+        guarded(out_error, || {
+            let Some(read) = read else {
+                return Err(invalid("read is null"));
+            };
+            // From here on the device is owned: dropping it tells the caller.
+            let device = Arc::new(CallbackSource {
+                read,
+                release,
+                context,
+                len: size,
+            });
+            if out_volume.is_null() {
+                return Err(invalid("out_volume is null"));
+            }
+            out_volume.write(std::ptr::null_mut());
+            if flags & !OPEN_FLAGS != 0 {
+                return Err(invalid("unknown open flags"));
+            }
+            if size == 0 {
+                return Err(invalid("the device has size 0"));
+            }
+            let options = OpenOptions {
+                partition: (partition != 0).then_some(partition),
+                accept_unverified: flags & OVMFS_OPEN_ACCEPT_UNVERIFIED != 0,
+                // Unbuffered reading is the caller's business here.
+                direct: false,
+                accept_in_use: flags & OVMFS_OPEN_ACCEPT_IN_USE != 0,
+                replay_journal: flags & OVMFS_OPEN_REPLAY_JOURNAL != 0,
+            };
+            let volume = Volume::open_with(device, &options)?;
             out_volume.write(Box::into_raw(Box::new(ovmfs_volume(volume))));
             Ok(())
         })

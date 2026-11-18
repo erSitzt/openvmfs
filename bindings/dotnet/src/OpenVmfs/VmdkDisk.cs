@@ -16,10 +16,12 @@ public readonly record struct DataExtent(long Offset, long Length)
 public sealed class VmdkDisk : IDisposable, IAsyncDisposable
 {
     private readonly DiskHandle _handle;
+    private readonly DeviceBridge? _bridge;
 
-    internal unsafe VmdkDisk(DiskHandle handle)
+    internal unsafe VmdkDisk(DiskHandle handle, DeviceBridge? bridge)
     {
         _handle = handle;
+        _bridge = bridge;
         try
         {
             Capacity = checked((long)Native.ovmfs_disk_capacity(handle));
@@ -61,7 +63,7 @@ public sealed class VmdkDisk : IDisposable, IAsyncDisposable
         {
             // An empty span pins as null; the native side accepts that for a length of 0.
             var status = Native.ovmfs_disk_read(_handle, (ulong)offset, buffer, (nuint)destination.Length, out var error);
-            Native.ThrowIfFailed(status, error);
+            Native.ThrowIfFailed(status, error, _bridge);
         }
     }
 

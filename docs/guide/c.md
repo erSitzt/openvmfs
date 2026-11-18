@@ -60,6 +60,7 @@ ovmfs_disk_close(disk);
 |---|---|
 | `ovmfs_volume_open(path, partition, flags, &volume, &error)` | Opens the datastore on one device or image. `partition` 0 detects the VMFS partition |
 | `ovmfs_volume_open_devices(paths, count, partition, flags, &volume, &error)` | The same for a datastore on several devices; all are needed, in any order |
+| `ovmfs_volume_open_device(read, release, context, size, partition, flags, &volume, &error)` | The same for a device that is not a path: the library reads it through your function. See below |
 | `ovmfs_volume_get_info(volume, &info, &error)` | Label, UUID, capacity, version, number of hosts that were holding locks |
 | `ovmfs_disk_open(volume, descriptor_path, &disk, &error)` | Opens a virtual disk by its descriptor (`vm1/vm1.vmdk`); follows snapshot chains |
 | `ovmfs_disk_capacity(disk)` | Size of the disk in bytes |
@@ -75,6 +76,27 @@ Flags for the open functions, combined with `|`:
 | `OVMFS_OPEN_REPLAY_JOURNAL` | Experimental: read the volume with its journals replayed |
 | `OVMFS_OPEN_ACCEPT_IN_USE` | Open disks although a host was writing to them |
 | `OVMFS_OPEN_ACCEPT_UNVERIFIED` | Read structures that were never verified against ESXi |
+
+## A device behind your own read function
+
+When the device is not something the operating system can open by path (a LUN reached through a tunnel, an image in
+memory, an object store), give the library a function instead:
+
+```c
+static int32_t my_read(void *context, uint64_t offset, uint8_t *buffer, size_t length) {
+    /* fill buffer with length bytes at offset; return 0, or anything else on failure */
+}
+static void my_release(void *context) { /* the library is done with the device */ }
+
+ovmfs_volume_open_device(my_read, my_release, my_context, device_size, 0, 0, &volume, &error);
+```
+
+- `my_read` is called from whatever thread uses the volume or its disks, from several at once.
+- `my_release` is called exactly once, when the library no longer uses the device: when the open fails, or when the
+  volume and every disk opened from it have been closed. A disk keeps the device in use after its volume is closed.
+- A failing read becomes `OVMFS_ERR_IO`; the message carries your status.
+- Every read of metadata is one call of your function. OpenVmfs keeps their number small, but a device with a slow
+  round trip is felt when a volume or a disk is opened.
 
 ## Status codes
 

@@ -115,6 +115,81 @@ public sealed class SampleImageTests
         }
     }
 
+    /// <summary>A file read through managed code, with a switch that makes it fail.</summary>
+    private sealed class FileDevice(string path) : IVmfsDevice, IDisposable
+    {
+        private readonly Microsoft.Win32.SafeHandles.SafeFileHandle _file = File.OpenHandle(path);
+
+        public int Reads;
+        public bool Fail;
+
+        public long Length => RandomAccess.GetLength(_file);
+
+        public void Read(long offset, Span<byte> destination)
+        {
+            Interlocked.Increment(ref Reads);
+            if (Fail)
+            {
+                throw new IOException("the tunnel is gone");
+            }
+
+            while (!destination.IsEmpty)
+            {
+                var read = RandomAccess.Read(_file, destination, offset);
+                if (read == 0)
+                {
+                    throw new EndOfStreamException();
+                }
+
+                destination = destination[read..];
+                offset += read;
+            }
+        }
+
+        public void Dispose() => _file.Dispose();
+    }
+
+    [Fact]
+    public async Task AVolumeCanBeReadThroughTheCallersOwnDevice()
+    {
+        var image = FindImage();
+        Assert.SkipWhen(image is null, "The sample image target/fixture-cache/dissect/vmfs6.bin is missing.");
+        using var device = new FileDevice(image!);
+
+        VmdkDisk disk;
+        using (var volume = VmfsVolume.Open(device))
+        {
+            Assert.Equal("vmfs6", volume.Label);
+            disk = volume.OpenDisk("normal.vmdk");
+        }
+
+        // The disk outlives the volume and keeps using the device, from several threads at once.
+        using (disk)
+        {
+            var before = device.Reads;
+            var hashes = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => Task.Run(() =>
+            {
+                var buffer = new byte[MiB];
+                disk.Read(42 * GiB, buffer);
+                return Convert.ToHexStringLower(SHA256.HashData(buffer));
+            })));
+            Assert.All(hashes, hash => Assert.Equal("ce6475b1fc22ad8543d2aee58ef77aa19eb5d208c372f4ee69885683e0213a08", hash));
+            Assert.True(device.Reads > before);
+
+            // What the device throws arrives as the inner exception of an I/O error.
+            device.Fail = true;
+            var error = Assert.Throws<VmfsException>(() => disk.Read(42 * GiB, new byte[512]));
+            Assert.Equal(VmfsErrorKind.Io, error.Kind);
+            Assert.IsType<IOException>(error.InnerException);
+            Assert.Equal("the tunnel is gone", error.InnerException!.Message);
+        }
+
+        // A device that fails during the open: the same.
+        var failed = Assert.Throws<VmfsException>(() => VmfsVolume.Open(device));
+        Assert.Equal(VmfsErrorKind.Io, failed.Kind);
+        Assert.IsType<IOException>(failed.InnerException);
+    }
+
     [Fact]
     public void VolumeFacts()
     {
