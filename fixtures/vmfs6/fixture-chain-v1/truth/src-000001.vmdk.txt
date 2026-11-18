@@ -1,0 +1,15 @@
+# Disk DescriptorFile
+version=1
+encoding="UTF-8"
+CID=fffffffe
+parentCID=fffffffe
+createType="seSparse"
+parentFileNameHint="src.vmdk"
+# Extent description
+RW 131072 SESPARSE "src-000001-sesparse.vmdk"
+
+# The Disk Data Base 
+#DDB
+
+ddb.grain = "8"
+ddb.longContentID = "1f6a3d14f65b505ed9fc5590fffffffe"

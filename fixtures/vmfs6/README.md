@@ -1,0 +1,153 @@
+# Fixtures written by ESXi
+
+Each fixture is the image of a small disk that carries a VMFS6 datastore created by ESXi, plus what ESXi itself
+reported about it. Images are stored compressed (`*.img.zst`) and unpacked as sparse files into
+`target/fixture-cache` by the test kit.
+
+Reference data is written by [`../recipes/pattern.py`](../recipes/pattern.py): every 512-byte sector names the disk
+it belongs to and its own sector number. Junk sectors, written before the test files exist, name themselves too.
+
+## fixture-zero-v1
+
+| | |
+|---|---|
+| Written by | ESXi 7.0.3 (build 23307199), running nested, 2026-11-18 |
+| Disk | 4 GiB, GUID partition table, VMFS partition from sector 2048 |
+| Datastore | `fz`, VMFS 6.82, UUID `6afdfbfe-33b90712-daa4-0050568b5583`, automatic unmap switched off |
+| State | cleanly unmounted before imaging; `voma` found 0 errors (`truth/voma.txt`) |
+| Image | `fixture-zero-v1.img.zst`, 4 GiB unpacked, about 2.2 GiB of it non-zero |
+| Changed after capture | 11 bytes: the host's IP address in its heartbeat slot (disk offset 0x1588036) was overwritten with zeros |
+
+### How it was made
+
+1. `partedUtil mklabel` / `setptbl` with the VMFS partition type, then `vmkfstools -C vmfs6 -S fz`.
+2. `esxcli storage vmfs reclaim config set --volume-label=fz --reclaim-priority=none`.
+3. **Junk:** `pattern.py junk junk.bin 2300` filled the free space with junk sectors; the file was then deleted.
+   Blocks allocated afterwards still hold that junk on disk until they are written.
+4. Test disks with `vmkfstools -c`, then `pattern.py write` into the `-flat.vmdk` files from the ESXi shell:
+
+| Disk | Size | Type | Disk id | Sectors written (first, count) |
+|---|---|---|---|---|
+| `pat/thin.vmdk` | 1 GiB | thin | 1 | (0, 2048) (10248, 16) (614400, 4096) (2095104, 2048) |
+| `pat/lazy.vmdk` | 300 MiB | zeroedthick | 2 | (2049, 3) (204800, 2048) (614392, 8) |
+| `pat/eager.vmdk` | 64 MiB | eagerzeroedthick | 3 | (20480, 2048) |
+| `pat/big.vmdk` | 1100 MiB | zeroedthick | 4 | (0, 16) (1046528, 4096) (2150400, 2048) (2252799, 1) |
+
+5. Files: `files/resident.txt` (14 bytes), `files/sub.bin` (20 KiB, disk id 10), `files/blocks.bin` (3 MiB + 512
+   bytes, disk id 11), `files/many/f0001` to `f0300`, and the symbolic link `files/link`.
+6. Ground truth collected on the ESXi shell into `fixture-zero-v1/truth/`:
+
+| File | Content |
+|---|---|
+| `sha256.txt` | `sha256sum` of every disk and file, read by ESXi through VMFS |
+| `<disk>.D.txt`, `<disk>.before.D.txt` | `vmkfstools -D` of the flat file, after and before the writes |
+| `<disk>.t0.txt`, `<disk>.before.t0.txt` | `vmkfstools -t0` of the descriptor: ESXi's block map |
+| `volume.txt` | `vmkfstools -Ph -v10` |
+| `voma.txt` | `voma -m vmfs -f check` on the unmounted volume |
+| `ls.txt` | directory listing |
+
+7. Unmounted, checked with `voma`, imaged with `dd` from the disk device.
+
+### What it showed
+
+- The disk is found through its partition table; all four disks and all files read identical to ESXi's hashes and
+  to the write plan, sector by sector.
+- A never-written block of the lazy-zeroed disks has bit 7 set in its address and holds junk on disk; ESXi and
+  OpenVmfs both read zeros. A write of three sectors into such a block made ESXi zero the rest of the block.
+- OpenVmfs's block map of `lazy` equals `truth/lazy.t0.txt`. The offsets `vmkfstools -t0` prints are offsets on
+  the whole disk.
+- The 1100 MiB thick disk uses small file blocks only (`numLFB 0`); `vmkfstools -Ph` reports
+  `Large File Blocks (total/used/file block clusters): 8/0/8` for this volume. Large file blocks need a bigger
+  datastore.
+- A second image taken while the datastore was mounted and idle has no heartbeat slot in use either.
+
+### Not covered
+
+Large file blocks, snapshot deltas, data written by a guest, a datastore in use by running VMs.
+
+## fixture-lfb-v1
+
+| | |
+|---|---|
+| Written by | ESXi 7.0.3 (build 23307199), running nested, 2026-11-18 |
+| Disk | 256 GiB (thin), GUID partition table, VMFS partition from sector 2048 |
+| Datastore | `f2`, VMFS 6.82, UUID `6afe0153-138d6a42-11e3-0050568b5583`, automatic unmap switched off |
+| State | cleanly unmounted before imaging; `voma` found 0 errors (`truth/voma.txt`) |
+| Image | **partial**: `fixture-lfb-v1.parts.zst` holds the captured ranges, `fixture-lfb-v1.ranges` lists them |
+| Changed after capture | 11 bytes: the host's IP address in its heartbeat slot (disk offset 0x1588036) was overwritten with zeros |
+
+Why this one exists: ESXi uses large file blocks only on datastores above 128 GiB, and a device that size cannot be
+imaged in full. Captured were the first 2 GiB, every data extent ESXi listed for the test disks, the first two and
+the last MiB of every "to be zeroed" extent, and two further MiB that a read trace showed to be needed
+(`recipes/capture_partial.py`, `recipes/fetch_missing.py`, packed with `recipes/pack_partial.py`). Those two were
+fetched after the datastore had been mounted again. In tests, a read outside the captured ranges is an error.
+
+### How it was made
+
+1. Datastore as for `fixture-zero-v1`.
+2. **Junk:** a 5 GiB lazy-zeroed disk (10 large file blocks) was filled with junk sectors (`pattern.py junkfill`)
+   and deleted.
+3. Test disks, written from the ESXi shell:
+
+| Disk | Size | Type | Large blocks | Disk id | Sectors written (first, count) |
+|---|---|---|---|---|---|
+| `pat/lfb-lazy.vmdk` | 2 GiB | zeroedthick | 4 | 21 | (0, 8) (1048560, 32) (1433600, 2048) (3147777, 3) (4194303, 1) |
+| `pat/lfb-eager.vmdk` | 1 GiB | eagerzeroedthick | 2 | 22 | (2048, 2048) (1052672, 16) |
+| `pat/lfb-mixed.vmdk` | 1300 MiB | zeroedthick | 2, plus 276 small blocks | 23 | (0, 16) (2097152, 2048) (2662399, 1) |
+| `pat/thin2.vmdk` | 2 GiB | thin | 0 | 24 | (4096, 8) (2097152, 2048) (4194296, 8) |
+
+4. Ground truth in `fixture-lfb-v1/truth/`, as for `fixture-zero-v1`.
+
+### What it showed
+
+- All four disks read identical to ESXi's hashes and to the write plan.
+- The address of a large file block is repeated in each of the 512 per-MiB entries it backs, and each entry has
+  its own "to be zeroed" bit. The second write range of `lfb-lazy` crosses the boundary between two large blocks.
+- `lfb-mixed` got the two large blocks that had held junk: its never-written MiBs hold junk on the device and read
+  as zeros.
+- OpenVmfs's block map of `lfb-mixed` equals `truth/lfb-mixed.t0.txt`.
+
+## fixture-guest-v1
+
+The datastore of `fixture-zero-v1` a little later, imaged **while a VM was running on it**.
+
+| | |
+|---|---|
+| Written by | a guest (Alpine Linux 3.24, paravirtual SCSI) inside ESXi 7.0.3, 2026-11-18 |
+| State | datastore mounted, VM powered on with all three disks open, guest idle after `sync`; one heartbeat slot in use |
+| Image | **partial**: only the ranges the tests read, plus one MiB of each never-written extent (`recipes/subset_image.py`, `recipes/pack_partial.py`) |
+| Changed after capture | the host's IP address in its heartbeat slot was overwritten with zeros |
+
+How it was made: `guest/src.vmdk` (64 MiB, thin) was filled with pattern 30 from the ESXi shell. The guest then
+copied sector ranges from it to the same sector numbers of two empty disks with `dd`:
+
+| Disk | Size | Type | Sectors written by the guest (first, count) |
+|---|---|---|---|
+| `guest/thin-g.vmdk` | 256 MiB | thin | (0, 16) (20480, 2048) (100000, 5) |
+| `guest/lazy-g.vmdk` | 128 MiB | zeroedthick | (2049, 3) (40960, 2048) |
+
+The hashes in `fixture-guest-v1/truth/sha256.txt` were computed by ESXi after the VM had been powered off (it cannot
+read the files while the VM holds them).
+
+What it showed: guest writes leave the same metadata as writes from the ESXi shell, and an image taken while the
+VM runs reads identical to what ESXi reads afterwards. Under the never-written blocks of `lazy-g` the device holds
+junk.
+
+## fixture-chain-v1 (input for snapshot chains, not used by tests yet)
+
+The same datastore after the second consistency probe (`docs/consistency.md`): the guest VM is powered off and has
+one VM snapshot, so every disk in `guest/` is a base (`x.vmdk`, `x-flat.vmdk`) plus a SESparse delta
+(`x-000001.vmdk`, `x-000001-sesparse.vmdk`). Full image, cleanly unmounted, `voma` 0 errors, IP address blanked.
+
+| Disk | Base | Delta |
+|---|---|---|
+| `guest/grow` | 400 MiB thin, 156 MiB written before the snapshot | 224 MiB written after it |
+| `guest/thin-g`, `guest/lazy-g`, `guest/src` | as in `fixture-guest-v1` | empty |
+
+`clone/grow-now.vmdk` and `clone/thin-g-now.vmdk` are ESXi's own consolidation of the chains (`vmkfstools -i`).
+`fixture-chain-v1/truth/sha256.txt` has the hashes of bases, clones and delta files, `*.vmdk.txt` the descriptors,
+`grow.chain.txt` the output of `vmkfstools -q -v1`. `pat/big.vmdk` of `fixture-zero-v1` was deleted to make room.
+
+## probe-crash2
+
+`probe-crash2/esxi.txt`: what ESXi reported about the base disk in the second consistency probe.

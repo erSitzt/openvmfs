@@ -1,0 +1,22 @@
+OpenVmfs
+Copyright 2026 OpenVmfs contributors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+OpenVmfs is an independent implementation. It contains no source code from other VMFS or VMDK implementations.
+
+VMware publishes no specification of VMFS. What is known about the format comes from the people who studied it
+before us, and we read their work to learn it. We thank the authors of:
+
+  - dissect.vmfs and dissect.hypervisor (Fox-IT / NCC Group, AGPL-3.0)
+  - vmfs-tools (Christophe Fillot, Mike Hommey, GPL-2.0-or-later)
+  - vmfs6-tools and vmfs6-tool (Weafon Tsao, Thomas Ward, Philipp Herkert and others, GPL-2.0-or-later)
+  - fvmfs, the Open Source VMFS Driver (fluid Operations, GPL-3.0)
+  - QEMU's VMDK block driver, including its description of the SESparse format
+  - libvmdk's format documentation (Joachim Metz, GFDL-1.3-or-later)
+
+docs/format/sources.md lists what was learned from each of them. The format description in docs/format is written
+in our own words and checked against volumes written by ESXi.
+
+VMware, ESXi, vSphere and VMFS are trademarks of Broadcom Inc. OpenVmfs is not affiliated with or endorsed by
+Broadcom.

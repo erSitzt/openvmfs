@@ -1,0 +1,3 @@
+Mapping for file pat/lazy.vmdk (314572800 bytes in size):
+[           0:   314572800] --> [VMFS Z- LVID:6afdfbfe-31dc6002-fef6-0050568b5583/6afdfbfe-13f86ecc-ad3b-0050568b5583/1:(  2166358016 -->   2480930816)]
+

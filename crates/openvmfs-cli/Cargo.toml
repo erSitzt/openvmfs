@@ -1,0 +1,20 @@
+[package]
+name = "openvmfs-cli"
+description = "Command line tool for reading VMFS6 volumes and the virtual disks stored on them"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "openvmfs"
+path = "src/main.rs"
+
+[dependencies]
+openvmfs = { path = "../openvmfs" }
+sha2 = "0.10"
+
+[lints]
+workspace = true

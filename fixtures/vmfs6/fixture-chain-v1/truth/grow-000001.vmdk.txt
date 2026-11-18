@@ -1,0 +1,15 @@
+# Disk DescriptorFile
+version=1
+encoding="UTF-8"
+CID=dd4a9120
+parentCID=7b555d49
+createType="seSparse"
+parentFileNameHint="grow.vmdk"
+# Extent description
+RW 819200 SESPARSE "grow-000001-sesparse.vmdk"
+
+# The Disk Data Base 
+#DDB
+
+ddb.grain = "8"
+ddb.longContentID = "57d9fc23957269fab3777f4edd4a9120"

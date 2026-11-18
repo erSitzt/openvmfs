@@ -1,0 +1,7 @@
+Mapping for file guest/lazy-g.vmdk (134217728 bytes in size):
+[           0:     1048576] --> [VMFS Z- LVID:6afdfbfe-31dc6002-fef6-0050568b5583/6afdfbfe-13f86ecc-ad3b-0050568b5583/1:(  3701473280 -->   3702521856)]
+[     1048576:     1048576] --> [VMFS -- LVID:6afdfbfe-31dc6002-fef6-0050568b5583/6afdfbfe-13f86ecc-ad3b-0050568b5583/1:(  3702521856 -->   3703570432)]
+[     2097152:    18874368] --> [VMFS Z- LVID:6afdfbfe-31dc6002-fef6-0050568b5583/6afdfbfe-13f86ecc-ad3b-0050568b5583/1:(  3703570432 -->   3722444800)]
+[    20971520:     1048576] --> [VMFS -- LVID:6afdfbfe-31dc6002-fef6-0050568b5583/6afdfbfe-13f86ecc-ad3b-0050568b5583/1:(  3722444800 -->   3723493376)]
+[    22020096:   112197632] --> [VMFS Z- LVID:6afdfbfe-31dc6002-fef6-0050568b5583/6afdfbfe-13f86ecc-ad3b-0050568b5583/1:(  3723493376 -->   3835691008)]
+

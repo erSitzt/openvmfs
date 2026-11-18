@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/OpenVmfs/OpenVmfs.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/OpenVmfs.Tests/OpenVmfs.Tests.csproj" />
+  </Folder>
+</Solution>

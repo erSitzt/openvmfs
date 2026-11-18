@@ -1,0 +1,15 @@
+# Disk DescriptorFile
+version=1
+encoding="UTF-8"
+CID=890c5025
+parentCID=890c5025
+createType="seSparse"
+parentFileNameHint="lazy-g.vmdk"
+# Extent description
+RW 262144 SESPARSE "lazy-g-000001-sesparse.vmdk"
+
+# The Disk Data Base 
+#DDB
+
+ddb.grain = "8"
+ddb.longContentID = "c6d5468cb6e8da24dfe8c1d2890c5025"

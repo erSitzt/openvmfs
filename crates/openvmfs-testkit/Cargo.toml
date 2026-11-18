@@ -1,0 +1,19 @@
+[package]
+name = "openvmfs-testkit"
+description = "Development helpers for OpenVmfs: fixture cache, pattern data, tracing and mutating block sources"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+openvmfs = { path = "../openvmfs" }
+flate2 = "1"
+ruzstd = "0.8"
+sha2 = "0.10"
+
+[lints]
+workspace = true

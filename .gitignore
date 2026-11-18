@@ -1,0 +1,17 @@
+# Build output
+/target/
+bindings/dotnet/**/bin/
+bindings/dotnet/**/obj/
+
+# Prior implementations, cloned for reading only (see CONTRIBUTING.md). Never committed.
+/reference/
+
+# Third-party sample images, downloaded on demand. Never committed or redistributed.
+/fixtures/external/
+
+# Local scratch
+*.img
+*.raw
+.vs/
+.idea/
+.vscode/

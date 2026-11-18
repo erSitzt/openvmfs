@@ -1,0 +1,5 @@
+Mapping for file pat/big.vmdk (1153433600 bytes in size):
+[           0:   536870912] --> [VMFS Z- LVID:6afdfbfe-31dc6002-fef6-0050568b5583/6afdfbfe-13f86ecc-ad3b-0050568b5583/1:(  2548039680 -->   3084910592)]
+[   536870912:   536870912] --> [VMFS Z- LVID:6afdfbfe-31dc6002-fef6-0050568b5583/6afdfbfe-13f86ecc-ad3b-0050568b5583/1:(  3084910592 -->   3621781504)]
+[  1073741824:    79691776] --> [VMFS Z- LVID:6afdfbfe-31dc6002-fef6-0050568b5583/6afdfbfe-13f86ecc-ad3b-0050568b5583/1:(  3621781504 -->   3701473280)]
+

@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      # rust-toolchain.toml selects the toolchain; rustup installs it on first use.
+      - name: Formatting
+        if: matrix.os == 'ubuntu-latest'
+        run: cargo fmt --all --check
+      - name: Lints
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Sample images (third-party test data, downloaded, never stored in this repository)
+        shell: bash
+        run: fixtures/fetch-external.sh vmfs/vmfs6.bin.gz vmfs/zero6.bin.gz vmfs/vmfs6l.bin.gz vmfs/vmfs6-resource-optimized.bin.gz
+      - name: Rust tests
+        run: cargo test --workspace
+      - name: Native library for the .NET binding
+        if: matrix.os == 'ubuntu-latest'
+        run: cargo build --release -p openvmfs-capi
+      - uses: actions/setup-dotnet@v4
+        if: matrix.os == 'ubuntu-latest'
+        with:
+          global-json-file: bindings/dotnet/global.json
+      - name: .NET tests
+        if: matrix.os == 'ubuntu-latest'
+        working-directory: bindings/dotnet
+        run: dotnet test --solution OpenVmfs.slnx -c Release

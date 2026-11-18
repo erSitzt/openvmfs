@@ -1,0 +1,32 @@
+[workspace]
+resolver = "2"
+members = ["crates/openvmfs", "crates/openvmfs-capi", "crates/openvmfs-cli", "crates/openvmfs-testkit"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+license = "Apache-2.0"
+repository = "https://example.invalid/openvmfs"
+authors = ["OpenVmfs contributors"]
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_debug_implementations = "warn"
+
+[workspace.lints.clippy]
+# On-disk arithmetic must never wrap silently: a wrapped offset is a silently wrong read.
+arithmetic_side_effects = "warn"
+cast_possible_truncation = "warn"
+indexing_slicing = "warn"
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"
+
+[profile.release]
+# A wrapped offset would be a silent wrong read, so overflow stays a hard error in release builds too.
+overflow-checks = true
+debug = "line-tables-only"
+
+[profile.dev]
+debug = "line-tables-only"

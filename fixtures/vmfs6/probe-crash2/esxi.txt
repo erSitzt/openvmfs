@@ -1,0 +1,23 @@
+sha256 of the frozen base as ESXi reads it:
+7db8e456843fbaad1177554710602c2b3d551874cab5ad61d8db982f3d3af221  guest/grow-flat.vmdk
+--- -D:
+len 419430400, nb 156 tbz 0, cow 0, newSinceEpoch 156, zla 3, bs 1048576
+affinityFD <4,49,0>, parentFD <4,49,0>, tbzGranularityShift 20, numLFB 0
+lastSFBClusterNum 2, numPreAllocBlocks 0, numPointerBlocks 1
+--- -t0 base (first and last lines):
+[           0:   139460608] --> [VMFS --   3905945600 -->   4045406208)]
+[   139460608:    24117248] --> [VMFS --   1533018112 -->   1557135360)]
+[   163577856:   255852544] --> [NOMP -- :(           0 -->    255852544)]
+[   139460608:    24117248] --> [VMFS --   1533018112 -->   1557135360)]
+[   163577856:   255852544] --> [NOMP -- :(           0 -->    255852544)]
+
+--- descriptors:
+guest/grow.vmdk:CID=7b555d49
+guest/grow.vmdk:parentCID=ffffffff
+guest/grow.vmdk:createType="vmfs"
+guest/grow.vmdk:RW 819200 VMFS "grow-flat.vmdk"
+guest/grow-000001.vmdk:CID=dd4a9120
+guest/grow-000001.vmdk:parentCID=7b555d49
+guest/grow-000001.vmdk:createType="seSparse"
+guest/grow-000001.vmdk:parentFileNameHint="grow.vmdk"
+guest/grow-000001.vmdk:RW 819200 SESPARSE "grow-000001-sesparse.vmdk"

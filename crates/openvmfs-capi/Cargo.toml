@@ -1,0 +1,33 @@
+[package]
+name = "openvmfs-capi"
+description = "C interface to OpenVmfs"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lib]
+name = "openvmfs_c"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+openvmfs = { path = "../openvmfs" }
+
+# This crate is the only place where unsafe code is allowed: it is the boundary to C.
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+missing_debug_implementations = "warn"
+
+[lints.clippy]
+undocumented_unsafe_blocks = "deny"
+missing_safety_doc = "deny"
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"
+
+# The checks above are for the library; its tests may unwrap.
+
+[dev-dependencies]
+openvmfs-testkit = { path = "../openvmfs-testkit" }

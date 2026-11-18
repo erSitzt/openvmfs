@@ -1,0 +1,21 @@
+# Disk DescriptorFile
+version=1
+encoding="UTF-8"
+CID=7b555d49
+parentCID=ffffffff
+createType="vmfs"
+
+# Extent description
+RW 819200 VMFS "grow-flat.vmdk"
+
+# The Disk Data Base 
+#DDB
+
+ddb.adapterType = "lsilogic"
+ddb.geometry.cylinders = "400"
+ddb.geometry.heads = "64"
+ddb.geometry.sectors = "32"
+ddb.longContentID = "86302488ef9e9993a27536a37b555d49"
+ddb.thinProvisioned = "1"
+ddb.uuid = "60 00 C2 99 08 86 42 97-b2 9d a2 4f 9b c0 1f 4a"
+ddb.virtualHWVersion = "14"

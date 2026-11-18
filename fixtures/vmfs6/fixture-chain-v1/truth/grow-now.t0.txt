@@ -1,0 +1,4 @@
+Mapping for file clone/grow-now.vmdk (419430400 bytes in size):
+[           0:   398458880] --> [VMFS -- LVID:6afdfbfe-31dc6002-fef6-0050568b5583/6afdfbfe-13f86ecc-ad3b-0050568b5583/1:(  2548039680 -->   2946498560)]
+[   398458880:    20971520] --> [NOMP -- :(           0 -->     20971520)]
+

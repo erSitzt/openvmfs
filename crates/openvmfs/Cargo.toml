@@ -1,0 +1,17 @@
+[package]
+name = "openvmfs"
+description = "Read-only access to VMware VMFS6 volumes and the virtual disks (VMDK) stored on them"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+keywords = ["vmfs", "vmdk", "vmware", "esxi", "filesystem"]
+categories = ["filesystem", "parser-implementations"]
+
+# No runtime dependencies on purpose: this crate parses untrusted on-disk data and is meant to be embedded.
+[dependencies]
+
+[lints]
+workspace = true

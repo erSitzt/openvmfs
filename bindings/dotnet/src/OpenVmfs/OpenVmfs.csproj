@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PackageId>OpenVmfs</PackageId>
+    <Description>Read-only access to VMware VMFS6 volumes and the virtual disks (VMDK) stored on them, without ESXi.</Description>
+    <PackageTags>vmfs;vmdk;vmware;esxi;backup</PackageTags>
+  </PropertyGroup>
+
+  <!--
+    The native library is built by cargo (`cargo build -release -p openvmfs-capi`). It is copied next to the
+    assembly for local runs and tests, and packed under runtimes/<rid>/native for NuGet.
+  -->
+  <ItemGroup>
+    <None Include="$(RepoRoot)target/release/libopenvmfs_c.so"
+          Condition="Exists('$(RepoRoot)target/release/libopenvmfs_c.so')"
+          Link="libopenvmfs_c.so" CopyToOutputDirectory="PreserveNewest"
+          Pack="true" PackagePath="runtimes/linux-x64/native" />
+    <None Include="$(RepoRoot)target/x86_64-pc-windows-gnu/release/openvmfs_c.dll"
+          Condition="Exists('$(RepoRoot)target/x86_64-pc-windows-gnu/release/openvmfs_c.dll')"
+          Link="openvmfs_c.dll" CopyToOutputDirectory="PreserveNewest"
+          Pack="true" PackagePath="runtimes/win-x64/native" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,115 @@
+using System.Runtime.InteropServices;
+
+namespace OpenVmfs;
+
+/// <summary>The C interface of the native library (<c>include/openvmfs.h</c>).</summary>
+internal static unsafe partial class Native
+{
+    private const string Library = "openvmfs_c";
+
+    /// <summary>The interface version this binding was written for.</summary>
+    internal const uint AbiVersion = 1;
+
+    internal const uint OpenAcceptUnverified = 1;
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct Range
+    {
+        public ulong Offset;
+        public ulong Length;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct VolumeInfo
+    {
+        public ulong Capacity;
+        public ulong FileBlockSize;
+        public ulong PartitionOffset;
+        public uint ActiveHeartbeats;
+        public uint MinorVersion;
+        public fixed byte Uuid[16];
+        public fixed byte Label[129];
+    }
+
+    [LibraryImport(Library)]
+    internal static partial uint ovmfs_abi_version();
+
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int ovmfs_volume_open(string devicePath, uint partition, uint flags, out nint volume, out nint error);
+
+    [LibraryImport(Library)]
+    internal static partial void ovmfs_volume_close(nint volume);
+
+    [LibraryImport(Library)]
+    internal static partial int ovmfs_volume_get_info(VolumeHandle volume, out VolumeInfo info, out nint error);
+
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int ovmfs_disk_open(VolumeHandle volume, string descriptorPath, out nint disk, out nint error);
+
+    [LibraryImport(Library)]
+    internal static partial void ovmfs_disk_close(nint disk);
+
+    [LibraryImport(Library)]
+    internal static partial ulong ovmfs_disk_capacity(DiskHandle disk);
+
+    [LibraryImport(Library)]
+    internal static partial int ovmfs_disk_read(DiskHandle disk, ulong offset, byte* buffer, nuint length, out nint error);
+
+    [LibraryImport(Library)]
+    internal static partial nuint ovmfs_disk_data_range_count(DiskHandle disk);
+
+    [LibraryImport(Library)]
+    internal static partial nuint ovmfs_disk_data_ranges(DiskHandle disk, Range* ranges, nuint capacity);
+
+    [LibraryImport(Library)]
+    internal static partial nint ovmfs_error_message(nint error);
+
+    [LibraryImport(Library)]
+    internal static partial void ovmfs_error_free(nint error);
+
+    /// <summary>Turns a failed status into an exception and frees the native error object.</summary>
+    internal static void ThrowIfFailed(int status, nint error)
+    {
+        if (status == 0)
+        {
+            return;
+        }
+
+        var message = "OpenVmfs failed without a message.";
+        if (error != 0)
+        {
+            message = Marshal.PtrToStringUTF8(ovmfs_error_message(error)) ?? message;
+            ovmfs_error_free(error);
+        }
+
+        throw new VmfsException((VmfsErrorKind)status, message);
+    }
+}
+
+/// <summary>Owns a native volume. The runtime keeps it alive while a call that uses it is running.</summary>
+internal sealed class VolumeHandle : SafeHandle
+{
+    public VolumeHandle(nint handle) : base(0, ownsHandle: true) => SetHandle(handle);
+
+    public override bool IsInvalid => handle == 0;
+
+    protected override bool ReleaseHandle()
+    {
+        Native.ovmfs_volume_close(handle);
+        return true;
+    }
+}
+
+/// <summary>Owns a native disk. The runtime keeps it alive while a call that uses it is running.</summary>
+internal sealed class DiskHandle : SafeHandle
+{
+    public DiskHandle(nint handle) : base(0, ownsHandle: true) => SetHandle(handle);
+
+    public override bool IsInvalid => handle == 0;
+
+    protected override bool ReleaseHandle()
+    {
+        Native.ovmfs_disk_close(handle);
+        return true;
+    }
+}
