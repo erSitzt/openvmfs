@@ -42,6 +42,7 @@ has another way to read the data should fall back to it.
 | "To be zeroed" markers other than the one ESXi was seen to write | Never seen |
 | A snapshot delta that was not closed cleanly (the active delta of a running VM) | Its journal would have to be replayed |
 | Zero grains in snapshot deltas, deltas in the older COWD format, chains across datastores | Never seen, or not created by VMFS6 |
+| Journals that hold anything but the transaction shape seen so far (only when replay is asked for) | Not understood |
 | VMFS5, VMFS-L, VMFS 6.81, 4Kn devices | No verified sample yet |
 | Extended LVM extent metadata | Never seen; datastores of 3 TiB and 17 TiB do not use it |
 | Raw device mappings, encrypted disks | The data is not on the volume, or not readable |
@@ -62,6 +63,12 @@ this ([`docs/consistency.md`](docs/consistency.md)):
 ESXi records on disk which files a host has open for writing. OpenVmfs refuses to open a virtual disk in that
 state (error kind `InUse`), so the first case is caught rather than read. Nine runs in one small lab are
 encouraging, not a guarantee.
+
+What such a disk is missing waits in the host's journal. As an experiment, OpenVmfs can replay the journal
+(`OpenOptions::replay_journal`, CLI `OPENVMFS_REPLAY_JOURNAL=1`): five images of a writing VM that read wrong
+without it read correctly with it. The format was worked out from those images
+([`docs/format/60-heartbeat-journal.md`](docs/format/60-heartbeat-journal.md)); anything that looks different is
+refused.
 `VolumeInfo::active_heartbeats` tells how many hosts were holding locks at that moment; zero does not prove the
 datastore was unmounted. Keep an independent check in the software that uses OpenVmfs.
 

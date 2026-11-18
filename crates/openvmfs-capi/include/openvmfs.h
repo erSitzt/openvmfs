@@ -42,6 +42,10 @@ extern "C" {
 /* Open disks although an ESXi host had them open for writing when the image was taken. Their content is then a mix
  * of old and new that no crash would produce; only for looking at data that is known to be damaged anyway. */
 #define OVMFS_OPEN_ACCEPT_IN_USE 4u
+/* Experimental: read the volume as if the transactions waiting in its journals had reached their final place, as
+ * an ESXi host does after a crash. Disks that were open for writing can then be opened. Anything in a journal that
+ * is not understood makes the open fail with OVMFS_ERR_UNSUPPORTED. */
+#define OVMFS_OPEN_REPLAY_JOURNAL 8u
 
 typedef struct ovmfs_volume ovmfs_volume;
 typedef struct ovmfs_disk ovmfs_disk;

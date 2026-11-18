@@ -132,7 +132,7 @@ impl Disk {
             // A file that a host had open for writing has its newest block allocations in the host's memory and in
             // the VMFS journal, not where a reader looks. Reading it gives a mix of old and new.
             let lock = file.stat().lock;
-            if lock.is_open_for_writing() && !volume.accepts_in_use() {
+            if lock.is_open_for_writing() && !volume.accepts_in_use() && !volume.journal_replayed() {
                 return Err(Error::in_use(format!(
                     "{extent_path:?} was open for writing on host {} when this image was taken (lock {lock:?}); its \
                      newest writes may be missing while later ones are present. Take a VM snapshot before the \

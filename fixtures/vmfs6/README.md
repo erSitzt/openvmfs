@@ -202,3 +202,13 @@ locked exclusively, "replay journal" flag set). Partial image.
 
 `fixture-inuse-v1/truth/marker-runs.jsonl`: the record of four runs of the same workload **without** a VM
 snapshot, all of them inconsistent.
+
+## fixture-journal-v1
+
+A storage snapshot of the probe datastore, taken four seconds after the guest started a burst of the marker
+workload, with no VM snapshot. Two block allocations of `probe/m-flat.vmdk` wait in the host's journal: read as it
+is, the disk lacks chunks 1696 to 1700 although its marker says 1700; with the journal replayed it is complete.
+Partial image.
+
+`fixture-journal-v1/truth/`: `sha256.txt` with the hash of the same disk on an image taken seven minutes later,
+when nothing was waiting; `marker-runs-replay.jsonl` with four more runs, each read with and without replay.

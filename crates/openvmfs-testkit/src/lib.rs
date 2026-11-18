@@ -23,8 +23,14 @@ use sha2::{Digest, Sha256};
 
 const CHUNK: usize = 1 << 20;
 
-/// Root of the repository.
+/// Root of the repository: where `fixtures/` is.
+///
+/// Test programs that were built on one machine and run on another (the Windows build, cross-compiled on Linux) set
+/// `OPENVMFS_REPO_ROOT` to the copy of the repository's `fixtures` directory tree on that machine.
 pub fn repo_root() -> PathBuf {
+    if let Some(root) = std::env::var_os("OPENVMFS_REPO_ROOT") {
+        return PathBuf::from(root);
+    }
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .canonicalize()
@@ -207,8 +213,13 @@ fn unpack_sparse(packed: &Path, unpacked: &Path, open: impl FnOnce(File) -> Box<
     }
     std::fs::create_dir_all(unpacked.parent().expect("cache directory")).expect("create cache directory");
     let partial = unpacked.with_extension(format!("partial-{}", std::process::id()));
-    let mut out = File::create(&partial).expect("create cache file");
+    // Windows marks a file sparse only while nobody has it open, so: create, mark, then open for writing.
+    drop(File::create(&partial).expect("create cache file"));
     mark_sparse(&partial);
+    let mut out = std::fs::OpenOptions::new()
+        .write(true)
+        .open(&partial)
+        .expect("open cache file");
     let mut input = open(File::open(packed).expect("open packed fixture"));
     let mut buf = vec![0u8; CHUNK];
     let mut total = 0u64;
@@ -239,10 +250,16 @@ fn unpack_sparse(packed: &Path, unpacked: &Path, open: impl FnOnce(File) -> Box<
 /// On NTFS a file is only sparse when it is marked so; elsewhere seeking over a range is enough.
 fn mark_sparse(path: &Path) {
     if cfg!(windows) {
-        let _ = std::process::Command::new("fsutil")
+        let done = std::process::Command::new("fsutil")
             .args(["sparse", "setflag"])
             .arg(path)
             .output();
+        if !done.is_ok_and(|output| output.status.success()) {
+            eprintln!(
+                "warning: could not mark {} as sparse; it will use its full size on disk",
+                path.display()
+            );
+        }
     }
 }
 

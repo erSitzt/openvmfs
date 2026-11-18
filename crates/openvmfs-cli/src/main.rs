@@ -39,6 +39,8 @@ Set OPENVMFS_DIRECT=1 to read without the operating system's page cache (O_DIREC
 <descriptor> is the path of the small .vmdk text file inside the datastore, for example vm1/vm1.vmdk.
 Exit codes: 0 ok, 1 error, 2 usage, 3 unsupported (the data may be fine, but this tool refuses to guess),
 4 in use (a host was writing to the disk when the image was taken; OPENVMFS_ACCEPT_IN_USE=1 reads it anyway).
+Experimental: OPENVMFS_REPLAY_JOURNAL=1 reads the volume with its journals replayed, as ESXi would see it after a
+crash. Disks that were in use can then be read.
 Set OPENVMFS_ACCEPT_UNVERIFIED=1 to read structures that have not been verified against ESXi yet (for testing).";
 
 const CHUNK: usize = 1 << 20;
@@ -150,6 +152,7 @@ fn open(device: &str) -> Result<Volume, CliError> {
         accept_unverified,
         direct: std::env::var_os("OPENVMFS_DIRECT").is_some_and(|value| value == "1"),
         accept_in_use: std::env::var_os("OPENVMFS_ACCEPT_IN_USE").is_some_and(|value| value == "1"),
+        replay_journal: std::env::var_os("OPENVMFS_REPLAY_JOURNAL").is_some_and(|value| value == "1"),
         ..OpenOptions::default()
     };
     // A datastore on several devices is given as a comma-separated list.
@@ -205,6 +208,19 @@ fn info(device: &str) -> CliResult {
             " (hosts were holding locks when this image was taken)"
         }
     );
+    match volume.journal_status() {
+        Ok(status) if status.replayed => println!(
+            "journal:            {} pending transaction(s) in {} journal(s), replayed for this read",
+            status.pending_transactions, status.journals
+        ),
+        Ok(status) if status.pending_transactions > 0 => println!(
+            "journal:            {} pending transaction(s) in {} journal(s): metadata was in flux; files that were \
+             open for writing lack their newest changes",
+            status.pending_transactions, status.journals
+        ),
+        Ok(status) => println!("journal:            nothing pending in {} journal(s)", status.journals),
+        Err(error) => println!("journal:            could not be read ({error})"),
+    }
     Ok(())
 }
 

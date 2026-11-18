@@ -174,6 +174,14 @@ impl FileSource {
                 Ok(n) => {
                     done = done.saturating_add(n);
                     offset = offset.saturating_add(n as u64);
+                    // An unbuffered read that ends inside a block has reached the end of the file. Asking again
+                    // would mean an unaligned offset, which Windows rejects.
+                    if self
+                        .alignment
+                        .is_some_and(|alignment| offset & alignment.saturating_sub(1) != 0)
+                    {
+                        break;
+                    }
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
                 Err(e) => return Err(e),

@@ -13,6 +13,7 @@ internal static unsafe partial class Native
     internal const uint OpenAcceptUnverified = 1;
     internal const uint OpenDirect = 2;
     internal const uint OpenAcceptInUse = 4;
+    internal const uint OpenReplayJournal = 8;
 
     [StructLayout(LayoutKind.Sequential)]
     internal struct Range

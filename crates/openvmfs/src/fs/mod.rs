@@ -5,6 +5,7 @@ mod blockmap;
 mod descriptor;
 mod dir;
 mod inode;
+mod journal;
 mod resource;
 
 use std::path::Path;
@@ -59,6 +60,13 @@ pub struct OpenOptions {
     /// Such a disk can be missing its newest writes while later writes to other places are present, which no
     /// crash would produce (`docs/consistency.md`). Only for looking at data that is known to be damaged anyway.
     pub accept_in_use: bool,
+    /// Read the volume as if the transactions waiting in its journals had reached their final place: what an ESXi
+    /// host does when it takes over a datastore after a crash. **Experimental.**
+    ///
+    /// With it, virtual disks that a host had open for writing are opened too, because their newest block
+    /// allocations are then visible. The journal format was worked out from a few images of one datastore; anything
+    /// that looks different makes the open fail with [`ErrorKind::Unsupported`]. See `docs/consistency.md`.
+    pub replay_journal: bool,
     /// Read devices without going through the page cache of the operating system; see
     /// [`FileSource::open_direct`]. Applies to [`Volume::open_paths`], which opens the devices itself.
     pub direct: bool,
@@ -93,6 +101,17 @@ pub struct VolumeInfo {
     pub lvm_devices: Vec<LvmDevice>,
     /// The LVM volume.
     pub lvm_volume: LvmVolume,
+}
+
+/// What the journals of a volume hold; see [`Volume::journal_status`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct JournalStatus {
+    /// Journals that heartbeat slots point to: one per host that had the datastore in use.
+    pub journals: u32,
+    /// Transactions that were written to a journal but not yet to their final place.
+    pub pending_transactions: u32,
+    /// Whether the volume is read with those transactions applied.
+    pub replayed: bool,
 }
 
 /// Metadata of a file or directory.
@@ -294,7 +313,12 @@ fn fatal(error: MapError) -> Error {
 
 #[derive(Debug)]
 struct VolumeInner {
-    volume: LogicalVolume,
+    /// The logical volume as it is on the devices.
+    lvm: Arc<LogicalVolume>,
+    /// What everything is read from: the logical volume, or the logical volume with its journals replayed.
+    volume: Arc<dyn BlockSource>,
+    /// Set when the volume was opened with journal replay: what the journals held.
+    replayed: Option<JournalStatus>,
     accept_in_use: bool,
     /// Offset of the VMFS partition on each device, in the order the devices were passed in.
     partition_offsets: Vec<u64>,
@@ -369,20 +393,34 @@ impl Volume {
         partition_offsets: Vec<u64>,
         options: &OpenOptions,
     ) -> Result<Self> {
-        let volume = LogicalVolume::open_devices(partitions)?;
-        let descriptor = FsDescriptor::read(&volume)?;
-        if descriptor.lvm_volume_uuid != volume.volume_info().uuid {
+        let lvm = Arc::new(LogicalVolume::open_devices(partitions)?);
+        let descriptor = FsDescriptor::read(&*lvm)?;
+        if descriptor.lvm_volume_uuid != lvm.volume_info().uuid {
             return Err(Error::corrupt(format!(
                 "the filesystem belongs to LVM volume {}, but it is stored on LVM volume {}",
                 descriptor.lvm_volume_uuid,
-                volume.volume_info().uuid
+                lvm.volume_info().uuid
             )));
         }
-        let geo = Geometry::new(&descriptor, volume.len(), options.accept_unverified)?;
-        let resources = open_resources(&volume, &geo)?;
+        let geo = Geometry::new(&descriptor, lvm.len(), options.accept_unverified)?;
+        // With journal replay, everything from here on is read through the pending transactions.
+        let mut replayed = None;
+        let mut volume: Arc<dyn BlockSource> = lvm.clone();
+        if options.replay_journal {
+            let pending = journal::scan(&*lvm).context("journal replay")?;
+            replayed = Some(JournalStatus {
+                journals: pending.journals,
+                pending_transactions: pending.transactions(),
+                replayed: true,
+            });
+            volume = Arc::new(journal::Replayed::new(lvm.clone(), &pending));
+        }
+        let resources = open_resources(&*volume, &geo)?;
 
         let mut inner = VolumeInner {
+            lvm,
             volume,
+            replayed,
             accept_in_use: options.accept_in_use,
             partition_offsets,
             descriptor,
@@ -406,7 +444,7 @@ impl Volume {
             return Err(Error::corrupt("the root descriptor is not a directory"));
         }
         inner.root = root;
-        inner.active_heartbeats = count_active_heartbeats(&inner.volume, &inner.geo)?;
+        inner.active_heartbeats = count_active_heartbeats(&*inner.volume, &inner.geo)?;
         Ok(Volume { inner: Arc::new(inner) })
     }
 
@@ -422,9 +460,9 @@ impl Volume {
             partition_offset: inner.partition_offsets.first().copied().unwrap_or(0),
             active_heartbeats: inner.active_heartbeats,
             descriptor: inner.descriptor.clone(),
-            lvm_device: inner.volume.device_info().clone(),
-            lvm_devices: inner.volume.devices().to_vec(),
-            lvm_volume: inner.volume.volume_info().clone(),
+            lvm_device: inner.lvm.device_info().clone(),
+            lvm_devices: inner.lvm.devices().to_vec(),
+            lvm_volume: inner.lvm.volume_info().clone(),
         }
     }
 
@@ -440,7 +478,29 @@ impl Volume {
 
     /// The logical volume as a block source (volume offsets).
     pub fn logical_volume(&self) -> &dyn BlockSource {
-        &self.inner.volume
+        &*self.inner.volume
+    }
+
+    /// What the journals of the volume hold: transactions that hosts had written to their journal but not yet to
+    /// the place where a reader looks. More than zero means that metadata was in flux when the image was taken.
+    ///
+    /// For a volume opened with [`OpenOptions::replay_journal`] this is what was applied. Otherwise the journals
+    /// are read now, which costs 2 MiB of reads per host that had the datastore in use.
+    pub fn journal_status(&self) -> Result<JournalStatus> {
+        if let Some(status) = &self.inner.replayed {
+            return Ok(status.clone());
+        }
+        let pending = journal::scan(&*self.inner.lvm)?;
+        Ok(JournalStatus {
+            journals: pending.journals,
+            pending_transactions: pending.transactions(),
+            replayed: false,
+        })
+    }
+
+    /// Whether the volume is read with its journals replayed.
+    pub(crate) fn journal_replayed(&self) -> bool {
+        self.inner.replayed.is_some()
     }
 
     /// Translates a volume offset into an offset on the device that holds it. For a datastore on several devices,
@@ -452,7 +512,7 @@ impl Volume {
     /// Translates a volume offset into a device (its position in the list the volume was opened with) and an
     /// offset on that device.
     pub fn device_location(&self, volume_offset: u64) -> Result<(usize, u64)> {
-        let (device, offset_in_partition, _) = self.inner.volume.translate(volume_offset)?;
+        let (device, offset_in_partition, _) = self.inner.lvm.translate(volume_offset)?;
         let partition_offset = self.inner.partition_offsets.get(device).copied().unwrap_or(0);
         Ok((
             device,
@@ -502,7 +562,7 @@ impl Volume {
         }
         let map = self.inner.build_map(&inode)?;
         let mut target = vec![0u8; to_usize(inode.length, "link length")?];
-        map.read_exact_at(&self.inner.volume, 0, &mut target)?;
+        map.read_exact_at(&*self.inner.volume, 0, &mut target)?;
         String::from_utf8(target).map_err(|_| Error::corrupt(format!("target of symbolic link {path:?} is not UTF-8")))
     }
 
@@ -536,7 +596,7 @@ impl Volume {
 impl VolumeInner {
     fn resolver(&self) -> Resolver<'_> {
         Resolver {
-            volume: &self.volume,
+            volume: &*self.volume,
             geo: &self.geo,
             resources: &self.resources,
         }
@@ -555,7 +615,7 @@ impl VolumeInner {
             )));
         }
         let offset = file.locate(addr.cluster(), addr.resource(), &self.geo)?;
-        let raw = read_vec(&self.volume, offset, self.geo.fd_size, "file descriptor")?;
+        let raw = read_vec(&*self.volume, offset, self.geo.fd_size, "file descriptor")?;
         Inode::parse(&raw, addr, offset, &self.geo)
     }
 
@@ -566,7 +626,7 @@ impl VolumeInner {
         let map = self.build_map(inode)?;
         dir::read_dir(
             &MappedFile {
-                volume: &self.volume,
+                volume: &*self.volume,
                 map: &map,
             },
             &self.geo,
@@ -603,7 +663,7 @@ impl VolumeInner {
 
 /// Opens the resource files. Their block maps can depend on each other (the sub-block file's pointer blocks live in
 /// the second pointer-block file, for example), so files are opened in rounds until none is left.
-fn open_resources(volume: &LogicalVolume, geo: &Geometry) -> Result<Resources> {
+fn open_resources(volume: &dyn BlockSource, geo: &Geometry) -> Result<Resources> {
     let mut pending = vec![
         (SystemFile::PointerBlocks2, SFD_POINTER_BLOCKS2),
         (SystemFile::PointerBlocks, SFD_POINTER_BLOCKS),
@@ -633,7 +693,7 @@ fn open_resources(volume: &LogicalVolume, geo: &Geometry) -> Result<Resources> {
     Ok(resources)
 }
 
-fn read_system_inode(volume: &LogicalVolume, geo: &Geometry, number: u32) -> Result<Inode> {
+fn read_system_inode(volume: &dyn BlockSource, geo: &Geometry, number: u32) -> Result<Inode> {
     let offset = geo.sfd_offset(u64::from(number))?;
     let raw = read_vec(volume, offset, geo.fd_size, "system file descriptor")?;
     let inode = Inode::parse(&raw, FdAddr::system(number), offset, geo)?;
@@ -647,7 +707,7 @@ fn read_system_inode(volume: &LogicalVolume, geo: &Geometry, number: u32) -> Res
 }
 
 fn open_resource(
-    volume: &LogicalVolume,
+    volume: &dyn BlockSource,
     geo: &Geometry,
     resources: &Resources,
     which: SystemFile,
@@ -661,7 +721,7 @@ fn open_resource(
 /// Small file block addresses are turned into volume offsets with a formula instead of through the file-block
 /// resource file. This checks the one assumption in that formula against the file's header: a cluster of small
 /// file blocks is exactly one large file block.
-fn check_file_block_layout(volume: &LogicalVolume, geo: &Geometry, resources: &Resources) -> Result<()> {
+fn check_file_block_layout(volume: &dyn BlockSource, geo: &Geometry, resources: &Resources) -> Result<()> {
     let inode = read_system_inode(volume, geo, SFD_FILE_BLOCKS).context(".fbb.sf")?;
     let map = BlockMap::build(&inode, geo, &Resolver { volume, geo, resources })
         .map_err(fatal)
@@ -682,7 +742,7 @@ fn check_file_block_layout(volume: &LogicalVolume, geo: &Geometry, resources: &R
     Ok(())
 }
 
-fn count_active_heartbeats(volume: &LogicalVolume, geo: &Geometry) -> Result<u32> {
+fn count_active_heartbeats(volume: &dyn BlockSource, geo: &Geometry) -> Result<u32> {
     let slot_size = geo.md_alignment;
     let mut active = 0u32;
     for slot in 0..HEARTBEAT_SLOTS {
@@ -730,7 +790,7 @@ impl Inode {
 /// The content of a file as a block source, for internal readers.
 #[derive(Debug)]
 struct MappedFile<'a> {
-    volume: &'a LogicalVolume,
+    volume: &'a dyn BlockSource,
     map: &'a BlockMap,
 }
 
@@ -793,6 +853,6 @@ impl BlockSource for File {
 
     /// Fills `buf` with file content. Holes and blocks that were never written read as zeros.
     fn read_exact_at(&self, offset: u64, buf: &mut [u8]) -> Result<()> {
-        self.inner.map.read_exact_at(&self.inner.volume.volume, offset, buf)
+        self.inner.map.read_exact_at(&*self.inner.volume.volume, offset, buf)
     }
 }

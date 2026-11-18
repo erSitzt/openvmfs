@@ -10,6 +10,7 @@ note records what we measured about that risk. It is evidence from a small lab, 
 |---|---|---|
 | VM snapshot first, storage snapshot 0.6 to about 2 s later; read the disk **below** the VM snapshot | Correct in 9 of 9 runs | Reads it |
 | No VM snapshot; the VM was writing or had just written | **Wrong in 5 of 5 runs**: the newest 8 to 11 MiB of newly allocated data are missing, while a later write to an existing block is present | Refuses the disk (`InUse`) |
+| The same disk, read with the VMFS journal replayed (experimental) | Correct in 5 of 5 runs | Reads it when asked to (`replay_journal`) |
 | The delta a running VM writes to | Shows none of the recent data in 7 of 7 runs | Refuses the disk (`InUse`, and `Unsupported` for the journal flag) |
 | Files that were closed before the storage snapshot | Correct, 47 of 47 | Reads them |
 
@@ -17,6 +18,9 @@ The rule that follows: **a file that an ESXi host had open for writing when the 
 be read reliably; a file that was closed, or open read-only, can.** Taking a VM snapshot is what turns a VM's
 current disk from the first kind into the second. ESXi records on disk how each file is locked, so a reader can
 tell the two apart, and OpenVmfs does.
+
+What a file of the first kind is missing sits in the journal of the host that had it open. OpenVmfs can apply it
+on request. That is new and rests on a handful of images, so the default stays as it is.
 
 ## Setup
 
@@ -107,6 +111,31 @@ after the last write; we did not measure when. ESXi itself is not affected: it h
 The same workload with a VM snapshot taken in the middle of it, and the storage snapshot about a second later, gave
 a complete disk below the VM snapshot: marker 1401, chunks 1 to 1401 present (`fixture-inuse-v1`).
 
+## Replaying the journal
+
+The block allocations that such an image lacks are in the journal of the host: one transaction per new block,
+written before the guest's write is acknowledged, and moved to its final place later. The format is not published;
+[`format/60-heartbeat-journal.md`](format/60-heartbeat-journal.md) describes what we worked out from two images of
+the same disk, one with two transactions waiting and one taken seven minutes later.
+
+With `OpenOptions::replay_journal`, OpenVmfs reads the volume as if the waiting transactions had been applied. The
+same marker workload, again without a VM snapshot, each image read both ways:
+
+| Image | Transactions waiting | Read as it is | Read with the journal replayed |
+|---|---|---|---|
+| 1 (burst finished about 2 s before) | 2 | chunks 1696 to 1700 missing | complete; SHA-256 equal to the disk on an image taken 7 minutes later |
+| 2 (guest still writing) | 15 | 53 chunks missing before the marker | complete up to the marker, plus the chunk under way |
+| 3 (guest still writing) | 14 | 52 chunks missing | complete, plus the chunk under way |
+| 4 (burst just finished) | 5 | 19 chunks missing | complete |
+| 5 (burst finished about 2 s before) | 6 | 21 chunks missing | complete |
+
+"Complete" means every chunk up to the marker is there in full and nothing lies beyond the chunk after it: the disk
+is in a state that a power failure could have left.
+
+Limits: five images of one disk on one datastore with one host. A journal that looks different from these in any
+field OpenVmfs checks makes the open fail instead. Whether a transaction that was only half written when the image
+was taken is always recognised is not known; a VM snapshot before the storage snapshot avoids the question.
+
 ## How a reader can tell: locks
 
 Every file descriptor starts with a lock record that ESXi writes in place, because other hosts must see it. On the
@@ -120,27 +149,29 @@ frozen copies:
 
 OpenVmfs refuses to open a virtual disk if its flat file or any delta of its chain was locked for writing, with an
 error of kind `InUse`. `OpenOptions::accept_in_use` (CLI: `OPENVMFS_ACCEPT_IN_USE=1`) overrides that for looking at
-data that is known to be damaged anyway. `FileStat::lock` shows the lock of any file.
+data that is known to be damaged anyway. `FileStat::lock` shows the lock of any file, and
+`Volume::journal_status` (CLI: `openvmfs info`) how many transactions were waiting in the journals.
 
 A lock can be stale: after a host crash a file stays locked until another host breaks the lock. Such a file was
 open for writing when the host died, so refusing it is still right.
 
 ## What this does not show
 
-- One small lab: one host, datastores of a few GiB, ESXi 7.0.3, 15 runs in total. Rare timing windows need far
+- One small lab: one host, datastores of a few GiB, ESXi 7.0.3, 20 runs in total. Rare timing windows need far
   more runs to show up.
 - Shared datastores with several hosts, files that switch addressing mode at that moment, large file blocks, and
   other ESXi versions were not exercised.
 - Why the closed disk is complete: we assume that closing a file for writing makes VMFS bring its metadata to its
   place before the VM snapshot returns. We have measured the result, not read the mechanism. The shortest gap
   between the two snapshots in our runs was 0.6 s.
-- Replaying the VMFS journal would remove the restriction. Nobody has published its format; we have not analysed
-  it.
+- The journal replay is experimental: see its limits above. The delta that a running VM writes to stays
+  unreadable either way, because SESparse keeps a journal of its own.
 
 So a backup program should take the VM snapshot first, leave a short pause before the storage snapshot, read only
 disks below that VM snapshot, treat `InUse` as "do not back this up from the storage snapshot", and keep an
 independent check, for example comparing blocks that changed-block tracking reports as unchanged with the previous
-backup.
+backup. Journal replay is the way to read a datastore for which no VM snapshot was taken, for example an old array
+snapshot; it is not a reason to skip the VM snapshot.
 
 ## A hazard found on the way
 

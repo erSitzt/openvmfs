@@ -29,6 +29,13 @@ public sealed record VmfsOpenOptions
     /// Only for looking at data that is known to be damaged anyway; never for a backup.
     /// </summary>
     public bool AcceptInUse { get; init; }
+
+    /// <summary>
+    /// Experimental: reads the volume as if the transactions waiting in its journals had reached their final
+    /// place, as an ESXi host does after a crash. Disks that were open for writing can then be opened. Anything in
+    /// a journal that is not understood makes the open fail with <see cref="VmfsErrorKind.Unsupported"/>.
+    /// </summary>
+    public bool ReplayJournal { get; init; }
 }
 
 /// <summary>
@@ -116,7 +123,8 @@ public sealed class VmfsVolume : IDisposable
 
         var flags = (options.AcceptUnverified ? Native.OpenAcceptUnverified : 0)
             | (options.DirectIo ? Native.OpenDirect : 0)
-            | (options.AcceptInUse ? Native.OpenAcceptInUse : 0);
+            | (options.AcceptInUse ? Native.OpenAcceptInUse : 0)
+            | (options.ReplayJournal ? Native.OpenReplayJournal : 0);
         var paths = new nint[devicePaths.Count];
         int status;
         nint raw;

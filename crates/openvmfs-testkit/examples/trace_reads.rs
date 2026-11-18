@@ -3,7 +3,7 @@
 //! Used when a large, mostly empty device is captured only in part: every range printed here must be inside the
 //! captured ranges, otherwise the reader saw zeros where the device has data.
 //!
-//! Usage: trace_reads IMAGE [--unverified] [--in-use] (DESCRIPTOR | dir:PATH | file:PATH)...
+//! Usage: trace_reads IMAGE [--unverified] [--in-use] [--replay] (DESCRIPTOR | dir:PATH | file:PATH)...
 //! Output: OFFSET LENGTH per line, merged.
 
 #![allow(
@@ -23,7 +23,8 @@ fn main() {
     let mut args: Vec<String> = std::env::args().skip(1).collect();
     let accept_unverified = args.iter().any(|a| a == "--unverified");
     let accept_in_use = args.iter().any(|a| a == "--in-use");
-    args.retain(|a| a != "--unverified" && a != "--in-use");
+    let replay_journal = args.iter().any(|a| a == "--replay");
+    args.retain(|a| !matches!(a.as_str(), "--unverified" | "--in-use" | "--replay"));
     let image = args.remove(0);
     let trace = Arc::new(TracingSource::new(Arc::new(
         FileSource::open(&image).expect("open image"),
@@ -31,6 +32,7 @@ fn main() {
     let options = OpenOptions {
         accept_unverified,
         accept_in_use,
+        replay_journal,
         ..OpenOptions::default()
     };
     // When the image lacks something the volume needs, the reads made so far say what to fetch next.
@@ -44,6 +46,10 @@ fn main() {
             return;
         }
     };
+    // The journals are read on request only; a fixture should hold them.
+    if let Err(error) = volume.journal_status() {
+        eprintln!("journal: {error}");
+    }
     let mut buf = vec![0u8; 1 << 20];
     for arg in &args {
         // `dir:PATH` lists a directory, `file:PATH` reads a file, anything else is a disk descriptor.

@@ -41,7 +41,10 @@ pub const OVMFS_OPEN_ACCEPT_UNVERIFIED: u32 = 1;
 pub const OVMFS_OPEN_DIRECT: u32 = 2;
 /// Flag for `ovmfs_volume_open`: open disks although a host was writing to them when the image was taken.
 pub const OVMFS_OPEN_ACCEPT_IN_USE: u32 = 4;
-const OPEN_FLAGS: u32 = OVMFS_OPEN_ACCEPT_UNVERIFIED | OVMFS_OPEN_DIRECT | OVMFS_OPEN_ACCEPT_IN_USE;
+/// Flag for `ovmfs_volume_open`: read the volume with its journals replayed (experimental).
+pub const OVMFS_OPEN_REPLAY_JOURNAL: u32 = 8;
+const OPEN_FLAGS: u32 =
+    OVMFS_OPEN_ACCEPT_UNVERIFIED | OVMFS_OPEN_DIRECT | OVMFS_OPEN_ACCEPT_IN_USE | OVMFS_OPEN_REPLAY_JOURNAL;
 
 /// Most devices `ovmfs_volume_open_devices` accepts.
 const MAX_DEVICES: usize = 32;
@@ -202,6 +205,7 @@ pub unsafe extern "C" fn ovmfs_volume_open(
                 accept_unverified: flags & OVMFS_OPEN_ACCEPT_UNVERIFIED != 0,
                 direct: flags & OVMFS_OPEN_DIRECT != 0,
                 accept_in_use: flags & OVMFS_OPEN_ACCEPT_IN_USE != 0,
+                replay_journal: flags & OVMFS_OPEN_REPLAY_JOURNAL != 0,
             };
             let volume = Volume::open_paths(&[path], &options)?;
             out_volume.write(Box::into_raw(Box::new(ovmfs_volume(volume))));
@@ -250,6 +254,7 @@ pub unsafe extern "C" fn ovmfs_volume_open_devices(
                 accept_unverified: flags & OVMFS_OPEN_ACCEPT_UNVERIFIED != 0,
                 direct: flags & OVMFS_OPEN_DIRECT != 0,
                 accept_in_use: flags & OVMFS_OPEN_ACCEPT_IN_USE != 0,
+                replay_journal: flags & OVMFS_OPEN_REPLAY_JOURNAL != 0,
             };
             let volume = Volume::open_paths(&paths, &options)?;
             out_volume.write(Box::into_raw(Box::new(ovmfs_volume(volume))));
