@@ -24,7 +24,7 @@ machine reads the virtual disks out of it. OpenVmfs is the part that understands
 **Step 1 is not optional.** A virtual disk that ESXi has open for writing has its newest block allocations in the
 host's memory and journal, not in the block map on disk. Read from a storage snapshot, such a disk lacks data that
 the guest was told is safely written, while later writes to existing blocks are present. In our lab that happened
-in 10 of 10 attempts. Taking the VM snapshot closes the disk for writing; from then on ESXi writes to a new delta
+in 15 of 15 attempts. Taking the VM snapshot closes the disk for writing; from then on ESXi writes to a new delta
 file, and the closed disk read correctly in 9 of 9 attempts. [../consistency.md](../consistency.md) has the
 measurements and their limits.
 
@@ -117,6 +117,6 @@ We have not measured throughput yet.
 
 OpenVmfs can apply the transactions that wait in the hosts' journals (`OpenOptions::replay_journal`). A disk that
 was open for writing then reads as ESXi would see it after a crash: crash-consistent, like a VM that lost power. In
-the lab this made 5 of 5 otherwise unreadable images correct. It is meant for the cases where step 1 is impossible,
+the lab this made 10 of 10 otherwise unreadable images correct. It is meant for the cases where step 1 is impossible,
 for example an existing array snapshot that was taken without VM snapshots. It is not a reason to skip step 1: the
 journal format is known from a handful of images, and the delta of a running VM stays unreadable either way.

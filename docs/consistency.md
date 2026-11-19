@@ -9,8 +9,8 @@ note records what we measured about that risk. It is evidence from a small lab, 
 | Case | Result | What OpenVmfs does |
 |---|---|---|
 | VM snapshot first, storage snapshot 0.6 to about 2 s later; read the disk **below** the VM snapshot | Correct in 16 of 16 runs (9 on ESXi 7.0.3, 7 on ESXi 8.0 U3) | Reads it |
-| No VM snapshot; the VM was writing or had just written | **Wrong in 10 of 10 runs**: the newest 1 to 13 MiB of newly allocated data are missing, while a later write to an existing block is present | Refuses the disk (`InUse`) |
-| The same disk, read with the VMFS journal replayed (experimental) | Correct in 5 of 5 runs | Reads it when asked to (`replay_journal`) |
+| No VM snapshot; the VM was writing or had just written | **Wrong in 15 of 15 runs** (10 on ESXi 7.0.3, 5 on ESXi 8.0 U3): the newest 1 to 13 MiB of newly allocated data are missing, while a later write to an existing block is present | Refuses the disk (`InUse`) |
+| The same disk, read with the VMFS journal replayed (experimental) | Correct in 10 of 10 runs (5 on each version) | Reads it when asked to (`replay_journal`) |
 | The delta a running VM writes to | Shows none of the recent data in 7 of 7 runs | Refuses the disk (`InUse`, and `Unsupported` for the journal flag) |
 | Files that were closed before the storage snapshot | Correct, 47 of 47 | Reads them |
 
@@ -137,7 +137,12 @@ same marker workload, again without a VM snapshot, each image read both ways:
 "Complete" means every chunk up to the marker is there in full and nothing lies beyond the chunk after it: the disk
 is in a state that a power failure could have left.
 
-Limits: five images of one disk on one datastore with one host. A journal that looks different from these in any
+On **ESXi 8.0 U3** the journal has the same format. Five more images of a writing VM, 1.2 to 4.7 s into a burst,
+with 5 to 11 transactions waiting: read as they are, 19 to 41 chunks were missing before the marker in every one;
+with the journal replayed, all five were complete.
+
+Limits: five images each on two ESXi versions, always one disk on one datastore with one host. A journal that looks
+different from these in any
 field OpenVmfs checks makes the open fail instead. Whether a transaction that was only half written when the image
 was taken is always recognised is not known; a VM snapshot before the storage snapshot avoids the question.
 

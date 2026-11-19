@@ -11,7 +11,8 @@ been verified. Do not rely on it for production backups yet.
 
 ## What works
 
-Verified against volumes written by ESXi 7.0.3 and ESXi 8.0 U3 (both VMFS 6.82): against reference data whose position is known,
+Verified against volumes written by ESXi 7.0.3 and ESXi 8.0 U3 (both VMFS 6.82): against reference data whose
+position is known,
 against the hashes and block maps ESXi itself reports, and file by file against an independent reader.
 
 - Finding the volume: bare VMFS partition or a disk with a GUID partition table.
@@ -56,7 +57,7 @@ A snapshot of a mounted datastore is crash-consistent at best. VMFS keeps a jour
 so metadata that was changing when the snapshot was taken may be read in an old state. We measured both sides of
 this ([`docs/consistency.md`](docs/consistency.md)):
 
-- The disk of a VM that was writing, with no VM snapshot: wrong in 10 of 10 runs. The newest 1 to 13 MiB of newly
+- The disk of a VM that was writing, with no VM snapshot: wrong in 15 of 15 runs. The newest 1 to 13 MiB of newly
   allocated data were missing while a later in-place write was present.
 - The same with a VM snapshot taken first, reading the disk below it: correct in 16 of 16 runs, on ESXi 7.0.3
   and 8.0 U3.
@@ -66,8 +67,8 @@ state (error kind `InUse`), so the first case is caught rather than read. Sixtee
 encouraging, not a guarantee.
 
 What such a disk is missing waits in the host's journal. As an experiment, OpenVmfs can replay the journal
-(`OpenOptions::replay_journal`, CLI `OPENVMFS_REPLAY_JOURNAL=1`): five images of a writing VM that read wrong
-without it read correctly with it. The format was worked out from those images
+(`OpenOptions::replay_journal`, CLI `OPENVMFS_REPLAY_JOURNAL=1`): ten images of a writing VM (ESXi 7.0.3 and
+8.0 U3) that read wrong without it read correctly with it. The format was worked out from those images
 ([`docs/format/60-heartbeat-journal.md`](docs/format/60-heartbeat-journal.md)); anything that looks different is
 refused.
 `VolumeInfo::active_heartbeats` tells how many hosts were holding locks at that moment; zero does not prove the

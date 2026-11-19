@@ -39,6 +39,8 @@ later; after a crash, another host replays the journal. Nothing about the format
 worked out from two images of one datastore (ESXi 7.0.3, VMFS 6.82): one taken while two block allocations were
 still waiting in the journal, one taken seven minutes later, when they had reached their place **[V]**. It is the
 basis of the experimental journal replay (`OpenOptions::replay_journal`), which refuses whatever looks different.
+Journals written by ESXi 8.0 U3 have the same format: replaying them made five of five images of a writing VM's
+disk complete **[V]**.
 
 ### Where a journal is
 
