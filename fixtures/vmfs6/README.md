@@ -223,3 +223,11 @@ The first fixtures from **ESXi 8.0 U3** (build 24022510); it formats VMFS 6.82 l
 - `fixture-chain-esxi8-v1`: a disk with three VM snapshots, with the same guest writes and discards as
   `fixture-chain-v2`. Partial image. `truth/sha256.txt` has the base and ESXi's consolidated clone of each level.
   ESXi 8 writes 0x200 into a SESparse header field that ESXi 7 leaves at 0.
+
+## fixture-double-v1
+
+Two thin disks larger than 2.5 TiB (4 TiB and 2600 GiB) on a 256 GiB datastore, ESXi 7.0.3. Files of that size use
+**double indirection** (`zla 4304` in `truth/*-flat.D.txt`). Written at the start, on both sides of the 2.5 TiB line
+and at the end. Partial image. The disks are too large to hash on ESXi, so the reference is the written pattern,
+sector by sector, and ESXi's block map (`truth/*.t0.txt`); `fixtures/recipes/check_chunks.py` does the same check on
+any image. The same disks made by ESXi 8.0 U3 read identical too (not kept as a fixture).

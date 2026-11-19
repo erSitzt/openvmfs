@@ -68,7 +68,7 @@ OpenVmfs refuses descriptors without the signature and descriptors that count co
 | 2 | sub-blocks | sub-block addresses **[V]** |
 | 3 | indirect | pointer blocks **[V]** |
 | 5 | indirect, second type | pointer blocks **[V]** (on `.sbc.sf`) |
-| 0x10D0 | double indirect | pointer blocks that hold pointer blocks **[V]** |
+| 0x10D0 | double indirect | pointer blocks that hold pointer blocks **[V]**; ESXi 7.0.3 and 8.0 U3 use it for files over 2.5 TiB (`fixture-double-v1`) |
 | 0x10D1 | resident | nothing: the data is in the descriptor **[V]** |
 
 - **Resident:** the data is at offset 0x1200 of the descriptor, up to 3584 bytes **[V]**. A 5-byte file and a
