@@ -13,11 +13,12 @@ variable "datastores" {
   description = "Test datastores: label => devices. More than one device makes a datastore that spans devices. Device names are the `test_devices` output of the esxi stage."
   type        = map(list(string))
   default = {
-    fz = ["mpx.vmhba0:C0:T6:L0"]                        # zero
-    f1 = ["mpx.vmhba0:C0:T1:L0"]                        # iso
-    f2 = ["mpx.vmhba0:C0:T2:L0"]                        # lfb
-    fp = ["mpx.vmhba0:C0:T3:L0"]                        # probe
-    sp = ["mpx.vmhba0:C0:T4:L0", "mpx.vmhba0:C0:T5:L0"] # spana, spanb
+    # Replace the device names with the ones stage 1 printed.
+    fz = ["naa.zero"]
+    f1 = ["naa.iso"]
+    f2 = ["naa.lfb"]
+    fp = ["naa.probe"]
+    sp = ["naa.spana", "naa.spanb"]
   }
 }
 

@@ -53,6 +53,12 @@ variable "name" {
   default = "openvmfs-esxi01"
 }
 
+variable "guest_id" {
+  description = "Guest type of the VM. vmkernel8Guest exists only on vSphere 8; an ESXi 8 guest runs with vmkernel7Guest as well."
+  type        = string
+  default     = "vmkernel7Guest"
+}
+
 variable "esxi_iso" {
   description = "Path of the ESXi installer ISO on a datastore, for example \"ISO/VMware-VMvisor-Installer-7.0U3.iso\". Use an ISO with a kickstart file for an unattended install (see README)."
   type        = string

@@ -4,8 +4,9 @@ Two stages that build the lab described in [`docs/internals/lab.md`](../../docs/
 host with thin test disks, then test datastores and small guest VMs on it. They work with `tofu` and with
 `terraform`.
 
-**Status: applied once each, then destroyed.** Stage 1 created a VM that booted the ESXi 7.0.3 installer; stage 2
-created a datastore on two devices, uploaded the ISO and started a guest from it on an existing nested host. A
+**Status: both stages have been applied.** Stage 1 built the lab's ESXi 8.0 U3 host (installed by hand through the
+console afterwards); stage 2 created its test datastores, one of them on two devices, and uploaded the guest ISO. On
+an ESXi 7.0.3 host stage 2 also started a guest. A
 second `plan` showed no changes in both. The scripted installation of ESXi between the stages was not tried.
 
 ## Stage 1: the nested host (`esxi/`)

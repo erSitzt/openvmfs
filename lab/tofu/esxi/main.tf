@@ -41,7 +41,7 @@ resource "vsphere_virtual_machine" "esxi" {
   host_system_id   = one(data.vsphere_host.host[*].id)
   datastore_id     = data.vsphere_datastore.ds.id
 
-  guest_id                   = "vmkernel7Guest"
+  guest_id                   = var.guest_id
   num_cpus                   = 4
   memory                     = 8192
   nested_hv_enabled          = true
