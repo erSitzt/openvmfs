@@ -2,7 +2,8 @@
 
 SESparse ("space-efficient sparse") is the format of snapshot deltas on VMFS6. VMware publishes no description of
 it. What follows was first learned from the read-only support in QEMU **[1]** and then checked against deltas
-written by ESXi 7.0.3, with ESXi's own consolidation of each chain (`vmkfstools -i`) as the reference **[V]**.
+written by ESXi 7.0.3 and ESXi 8.0 U3, with ESXi's own consolidation of each chain (`vmkfstools -i`) as the
+reference **[V]**. The two versions differ in one header field.
 
 A delta holds the blocks ("grains", 4 KiB) written since the snapshot. A read of a grain goes to the newest delta
 first and falls through to its parent, down to the base disk.
@@ -19,7 +20,8 @@ At byte 0, 512 bytes, all fields 64-bit; offsets and sizes are in sectors.
 | 24 | grain size | 8 (4 KiB) |
 | 32 | grain table size | 64 (4096 entries) |
 | 40 | flags | 0 |
-| 48–79 | four reserved fields | 0 |
+| 48 | unknown | 0 on ESXi 7.0.3, **0x200 on ESXi 8.0 U3** **[V]** |
+| 56–79 | three reserved fields | 0 |
 | 80, 88 | volatile header offset, size | 1, 1 |
 | 96, 104 | journal header offset, size | 2, 2 |
 | 112, 120 | journal offset, size | 2048, 2048 |

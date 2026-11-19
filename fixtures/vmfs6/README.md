@@ -212,3 +212,14 @@ Partial image.
 
 `fixture-journal-v1/truth/`: `sha256.txt` with the hash of the same disk on an image taken seven minutes later,
 when nothing was waiting; `marker-runs-replay.jsonl` with four more runs, each read with and without replay.
+
+## fixture-basic-esxi8-v1 and fixture-chain-esxi8-v1
+
+The first fixtures from **ESXi 8.0 U3** (build 24022510); it formats VMFS 6.82 like ESXi 7.0.3.
+
+- `fixture-basic-esxi8-v1`: the datastore that `fixtures/recipes/make_basic.sh` builds: thin, lazy-zeroed (over
+  junk), eager-zeroed and far-apart thin disks, small files, a symlink, a directory with 300 files. `truth/` holds
+  what the script recorded on ESXi; `fixtures/recipes/compare_truth.py` compares an image with such a record.
+- `fixture-chain-esxi8-v1`: a disk with three VM snapshots, with the same guest writes and discards as
+  `fixture-chain-v2`. Partial image. `truth/sha256.txt` has the base and ESXi's consolidated clone of each level.
+  ESXi 8 writes 0x200 into a SESparse header field that ESXi 7 leaves at 0.

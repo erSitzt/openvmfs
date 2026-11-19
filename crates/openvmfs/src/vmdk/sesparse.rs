@@ -78,8 +78,17 @@ impl SeSparse {
         expect("grain size", 24, GRAIN_SECTORS)?;
         expect("grain table size", 32, TABLE_SECTORS)?;
         expect("flags", 40, 0)?;
-        for (index, offset) in [48usize, 56, 64, 72].into_iter().enumerate() {
-            expect(&format!("reserved field {index}"), offset, 0)?;
+        // The first of four fields without a known meaning is 0 in deltas written by ESXi 7.0.3 and 0x200 in deltas
+        // written by ESXi 8.0 U3. Everything else in the format is the same; both read identical to ESXi's own
+        // consolidation.
+        let first_reserved = header.u64(48)?;
+        if first_reserved != 0 && first_reserved != 0x200 {
+            return Err(Error::unsupported(format!(
+                "SESparse header: reserved field 0 is {first_reserved:#x}, only 0x0 and 0x200 have been verified"
+            )));
+        }
+        for (index, offset) in [56usize, 64, 72].into_iter().enumerate() {
+            expect(&format!("reserved field {}", index.saturating_add(1)), offset, 0)?;
         }
         if header.bytes(208, 304)?.iter().any(|&b| b != 0) {
             return Err(Error::unsupported("SESparse header: padding is not zero"));
