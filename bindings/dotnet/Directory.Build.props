@@ -10,6 +10,8 @@
     <Product>OpenVmfs</Product>
     <VersionPrefix>0.2.0</VersionPrefix>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/erSitzt/openvmfs</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/erSitzt/openvmfs</PackageProjectUrl>
     <Copyright>Copyright (c) OpenVmfs contributors</Copyright>
     <!-- Root of the repository, where cargo puts the native library. -->
     <RepoRoot>$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)', '..', '..'))</RepoRoot>

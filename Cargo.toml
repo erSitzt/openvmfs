@@ -7,7 +7,7 @@ version = "0.1.0"
 edition = "2021"
 rust-version = "1.85"
 license = "Apache-2.0"
-repository = "https://example.invalid/openvmfs"
+repository = "https://github.com/erSitzt/openvmfs"
 authors = ["OpenVmfs contributors"]
 
 [workspace.lints.rust]

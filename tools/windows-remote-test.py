@@ -9,8 +9,10 @@ What it does:
 
 Nothing is installed and nothing outside that directory is touched.
 
-Usage: tools/windows-remote-test.py --host HOST --env FILE [--keep] [--only NAME ...]
-  FILE holds two lines, WINDOWS_USER=DOMAIN\\name and WINDOWS_PASSWORD=...  (mode 600; never printed)
+Usage: tools/windows-remote-test.py --host HOST --env FILE [--user-key KEY] [--password-key KEY] [--keep]
+                                    [--only NAME ...]
+  FILE holds two lines, WINDOWS_USER=DOMAIN\\name and WINDOWS_PASSWORD=...  (mode 600; never printed).
+  --user-key and --password-key name other keys, to reuse a credentials file that already exists.
 Needs: a Python with `pywinrm` and `smbprotocol`; WinRM (5985, NTLM) and SMB (445) open on the Windows side.
        Run it with `python -I`, so that nothing in the current directory shadows a standard module.
 .NET tests: dotnet publish bindings/dotnet/tests/OpenVmfs.Tests -c Release -r win-x64 --self-contained -o target/dotnet-win
@@ -32,16 +34,15 @@ BUILD = ROOT / "target/x86_64-pc-windows-gnu/release"
 MAX_DISK_USE = 12 << 30
 
 
-def load_env(path):
+def load_env(path, user_key, password_key):
     values = {}
     for line in pathlib.Path(path).expanduser().read_text().splitlines():
         if "=" in line and not line.lstrip().startswith("#"):
             key, value = line.split("=", 1)
             values[key.strip()] = value.strip()
-    user = values.get("WINDOWS_USER") or values.get("BDFU_DEPLOY_USER")
-    password = values.get("WINDOWS_PASSWORD") or values.get("BDFU_DEPLOY_PASSWORD")
+    user, password = values.get(user_key), values.get(password_key)
     if not user or not password:
-        sys.exit(f"{path}: WINDOWS_USER and WINDOWS_PASSWORD are needed")
+        sys.exit(f"{path}: {user_key} and {password_key} are needed")
     return user, password
 
 
@@ -49,10 +50,12 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", required=True)
     parser.add_argument("--env", required=True)
+    parser.add_argument("--user-key", default="WINDOWS_USER", help="key of the user name in the env file")
+    parser.add_argument("--password-key", default="WINDOWS_PASSWORD", help="key of the password in the env file")
     parser.add_argument("--keep", action="store_true", help="leave the files on the Windows machine")
     parser.add_argument("--only", nargs="*", default=[], help="run only test programs whose name contains one of these")
     args = parser.parse_args()
-    user, password = load_env(args.env)
+    user, password = load_env(args.env, args.user_key, args.password_key)
 
     session = winrm.Session(f"http://{args.host}:5985/wsman", auth=(user, password), transport="ntlm",
                             message_encryption="always", operation_timeout_sec=120, read_timeout_sec=150)

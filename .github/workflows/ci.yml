@@ -25,8 +25,9 @@ jobs:
       - name: Sample images (third-party test data, downloaded, never stored in this repository)
         shell: bash
         run: fixtures/fetch-external.sh vmfs/vmfs6.bin.gz vmfs/zero6.bin.gz vmfs/vmfs6l.bin.gz vmfs/vmfs6-resource-optimized.bin.gz
+      # Release mode: the fixture tests hash several gigabytes.
       - name: Rust tests
-        run: cargo test --workspace
+        run: cargo test --workspace --release
       - name: Native library for the .NET binding
         if: matrix.os == 'ubuntu-latest'
         run: cargo build --release -p openvmfs-capi
