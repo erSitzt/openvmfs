@@ -27,6 +27,12 @@ variable "cluster" {
   type        = string
 }
 
+variable "host" {
+  description = "ESXi host to place the VM on. Needed when the datastore is local to one host of the cluster."
+  type        = string
+  default     = null
+}
+
 variable "datastore" {
   description = "Datastore for the VM and its thin test disks."
   type        = string
@@ -65,8 +71,8 @@ variable "test_disks_gb" {
     zero  = 4   # base disks: thin, lazy, eager
     iso   = 16  # guest ISO and clones
     lfb   = 256 # large file blocks need more than 128 GiB
-    probe = 3   # consistency experiments: small, because it is downloaded whole every run
-    spana = 3   # a datastore on two devices
-    spanb = 2
+    probe = 4   # consistency experiments: small, because it is downloaded whole every run
+    spana = 4   # a datastore on two devices
+    spanb = 4   # the vSphere API wants at least 4 GiB for a VMFS6 device
   }
 }

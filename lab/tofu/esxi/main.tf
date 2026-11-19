@@ -7,6 +7,12 @@ data "vsphere_compute_cluster" "cluster" {
   datacenter_id = data.vsphere_datacenter.dc.id
 }
 
+data "vsphere_host" "host" {
+  count         = var.host == null ? 0 : 1
+  name          = var.host
+  datacenter_id = data.vsphere_datacenter.dc.id
+}
+
 data "vsphere_datastore" "ds" {
   name          = var.datastore
   datacenter_id = data.vsphere_datacenter.dc.id
@@ -32,6 +38,7 @@ resource "vsphere_virtual_machine" "esxi" {
   name             = var.name
   folder           = var.folder
   resource_pool_id = data.vsphere_compute_cluster.cluster.resource_pool_id
+  host_system_id   = one(data.vsphere_host.host[*].id)
   datastore_id     = data.vsphere_datastore.ds.id
 
   guest_id                   = "vmkernel7Guest"

@@ -306,6 +306,20 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn a_volume_without_the_address_layout_flag_is_refused() {
+        let mut volume = vec![0u8; 4 << 20];
+        write_descriptor(&mut volume);
+        let at = FS_DESCRIPTOR_OFFSET as usize + 0x19;
+        volume[at..at + 4].copy_from_slice(&0x4002u32.to_le_bytes());
+        let descriptor = FsDescriptor::read(&MemorySource::new(volume)).unwrap();
+        assert_eq!(
+            Geometry::new(&descriptor, 4 << 20, false).unwrap_err().kind(),
+            ErrorKind::Unsupported
+        );
+        assert!(Geometry::new(&descriptor, 4 << 20, true).is_ok());
+    }
+
+    #[test]
     fn parses_the_verified_layout() {
         let d = FsDescriptor::read(&MemorySource::new(volume())).unwrap();
         assert_eq!(d.version_string(), "6.82");

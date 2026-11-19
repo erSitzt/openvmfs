@@ -4,8 +4,9 @@ Two stages that build the lab described in [`docs/internals/lab.md`](../../docs/
 host with thin test disks, then test datastores and small guest VMs on it. They work with `tofu` and with
 `terraform`.
 
-**Status: validated, not applied.** The configuration passes `tofu validate`. The lab the fixtures came from was
-built by hand with the same settings; nobody has run `apply` on these files yet. Expect to adjust details.
+**Status: applied once each, then destroyed.** Stage 1 created a VM that booted the ESXi 7.0.3 installer; stage 2
+created a datastore on two devices, uploaded the ISO and started a guest from it on an existing nested host. A
+second `plan` showed no changes in both. The scripted installation of ESXi between the stages was not tried.
 
 ## Stage 1: the nested host (`esxi/`)
 
@@ -23,6 +24,9 @@ What it does not do: install ESXi. Either install by hand through the VM's conso
 that carries a kickstart file (`ks.cfg.example`; VMware documents the procedure as a "scripted installation") and
 point `esxi_iso` to it. After the installation the host has an address from DHCP; evaluation mode is enough.
 
+Set `host` when the datastore is local to one host of the cluster; otherwise vCenter may place the VM on a host
+that cannot see it.
+
 The account needs the right to create VMs in the folder, to use the datastore and network, and to take snapshots
 of the VM (the consistency experiments use them).
 
@@ -37,7 +41,9 @@ export TF_VAR_esxi_password=...
 tofu init && tofu apply -var esxi_host=192.0.2.10 -var guest_iso=$HOME/Downloads/alpine-virt-3.20.0-x86_64.iso
 ```
 
-The device names in `datastores` must match the `test_devices` output of stage 1.
+The device names in `datastores` must match the `test_devices` output of stage 1. The host must offer a disk for it: a device that was detached on this host
+before (`esxcli storage core device detached list`) is not offered until that record is removed. The disks in the
+test were 4 GiB; smaller ones were not tried through the API.
 
 ## What stays manual
 
