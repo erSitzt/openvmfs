@@ -26,6 +26,8 @@ The lock mode says how hosts had the file open when an image of the datastore wa
 | Current disk of a running VM: its flat file, or its newest delta | 1 exclusive | UUID of the host |
 | Disk below a VM snapshot of a running VM | 2 read-only | zeros |
 
+Seen the same way on ESXi 7.0.3 and ESXi 8.0 U3.
+
 A file that was open for writing has its newest block allocations in the host's memory and in the journal, not in
 its block map on disk (`docs/consistency.md`). OpenVmfs reports the mode in `FileStat::lock` and refuses to open a
 virtual disk with a file in mode 1 or 3.

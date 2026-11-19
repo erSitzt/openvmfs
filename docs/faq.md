@@ -14,7 +14,9 @@ Without a VM snapshot, the disk on the storage snapshot lacks its newest blocks,
 
 ### Which versions are supported?
 
-VMFS 6.82. Our own fixtures come from ESXi 7.0.3; the public sample images that the tests also read were made by
+VMFS 6.82, which is what both ESXi 7.0.3 and ESXi 8.0 U3 format. Our own fixtures come from those two versions;
+the one difference found between them is a header field of snapshot deltas
+([format/80-sesparse.md](format/80-sesparse.md)). The public sample images that the tests also read were made by
 another installation, whose version we do not know. VMFS5, VMFS-L and VMFS 6.81 are refused: there is no verified
 sample.
 
