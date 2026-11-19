@@ -8,7 +8,7 @@ note records what we measured about that risk. It is evidence from a small lab, 
 
 | Case | Result | What OpenVmfs does |
 |---|---|---|
-| VM snapshot first, storage snapshot 0.6 to about 2 s later; read the disk **below** the VM snapshot | Correct in 9 of 9 runs | Reads it |
+| VM snapshot first, storage snapshot 0.6 to about 2 s later; read the disk **below** the VM snapshot | Correct in 16 of 16 runs (9 on ESXi 7.0.3, 7 on ESXi 8.0 U3) | Reads it |
 | No VM snapshot; the VM was writing or had just written | **Wrong in 10 of 10 runs**: the newest 1 to 13 MiB of newly allocated data are missing, while a later write to an existing block is present | Refuses the disk (`InUse`) |
 | The same disk, read with the VMFS journal replayed (experimental) | Correct in 5 of 5 runs | Reads it when asked to (`replay_journal`) |
 | The delta a running VM writes to | Shows none of the recent data in 7 of 7 runs | Refuses the disk (`InUse`, and `Unsupported` for the journal flag) |
@@ -24,7 +24,8 @@ on request. That is new and rests on a handful of images, so the default stays a
 
 ## Setup
 
-- ESXi 7.0.3 running nested; small VMFS 6.82 datastores on its virtual disks.
+- ESXi 7.0.3 and, for some series, ESXi 8.0 U3, each running nested; small VMFS 6.82 datastores on their virtual
+  disks. Unless a section says otherwise, numbers are from 7.0.3.
 - "Storage snapshot" = a snapshot of the nested host's VM taken from the outside (no memory, no quiescing), which
   freezes its virtual disks at one instant. The frozen disk was copied and downloaded **without ever showing it to
   an ESXi host**, so no journal was replayed on it.
@@ -77,6 +78,10 @@ the mixed workload described below: 9 of 9.
 In all seven runs the delta that the VM was writing to at that moment looked like this on the frozen copy: its
 "replay journal" flag set, its file as short as an empty delta, and none of the data in its tables that the guest
 had written to it in the 0.6 to 1.3 s since it was created. It cannot be read, and a backup does not need it.
+
+The same series on **ESXi 8.0 U3** (seven runs, storage snapshot 0.8 to 1.2 s after the VM snapshot, one of them
+7.6 s): seven of seven identical to ESXi's clones and in order, and the delta being written was flagged in all
+seven (`fixtures/vmfs6/probe-series-esxi8/results.json`).
 
 ## No VM snapshot: the disk of a writing VM
 

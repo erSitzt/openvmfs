@@ -11,7 +11,7 @@ been verified. Do not rely on it for production backups yet.
 
 ## What works
 
-Verified against volumes written by ESXi 7.0.3 (VMFS 6.82): against reference data whose position is known,
+Verified against volumes written by ESXi 7.0.3 and ESXi 8.0 U3 (both VMFS 6.82): against reference data whose position is known,
 against the hashes and block maps ESXi itself reports, and file by file against an independent reader.
 
 - Finding the volume: bare VMFS partition or a disk with a GUID partition table.
@@ -58,10 +58,11 @@ this ([`docs/consistency.md`](docs/consistency.md)):
 
 - The disk of a VM that was writing, with no VM snapshot: wrong in 10 of 10 runs. The newest 1 to 13 MiB of newly
   allocated data were missing while a later in-place write was present.
-- The same with a VM snapshot taken first, reading the disk below it: correct in 9 of 9 runs.
+- The same with a VM snapshot taken first, reading the disk below it: correct in 16 of 16 runs, on ESXi 7.0.3
+  and 8.0 U3.
 
 ESXi records on disk which files a host has open for writing. OpenVmfs refuses to open a virtual disk in that
-state (error kind `InUse`), so the first case is caught rather than read. Nine runs in one small lab are
+state (error kind `InUse`), so the first case is caught rather than read. Sixteen runs in one small lab are
 encouraging, not a guarantee.
 
 What such a disk is missing waits in the host's journal. As an experiment, OpenVmfs can replay the journal

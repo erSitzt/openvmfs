@@ -1,0 +1,264 @@
+{
+ "runs": [
+  {
+   "run": 1,
+   "level": 0,
+   "descriptor": "probe/p.vmdk",
+   "ours": "c57e1aab4083527df519cd01ceb8d1e34323814a85580b7ba4b870c5635ba716",
+   "data_bytes": 6291456,
+   "active_heartbeats": "1 (hosts were holding locks when this image was taken)",
+   "seconds_enter_to_vm_snapshot_done": 1.05,
+   "seconds_vm_snapshot_done_to_outer_snapshot_done": 0.76,
+   "frozen_order": {
+    "full_mib": 5,
+    "partly_written_mib": 1,
+    "in_order": true,
+    "data_beyond_the_copy": 0
+   },
+   "active_order": {
+    "error": "a-f200-0050568b0de0 when this image was taken (lock Exclusive); its newest writes may be missing while later ones are present. Take a VM snapshot before the storage snapshot and read the disk below it"
+   },
+   "active_delta": {
+    "length": 8388608,
+    "replay_journal": 1,
+    "journal_sectors_in_use": 0,
+    "allocated_grains": 0,
+    "grains_beyond_the_file": 0,
+    "file": "probe/p-000001-sesparse.vmdk"
+   },
+   "esxi": "c57e1aab4083527df519cd01ceb8d1e34323814a85580b7ba4b870c5635ba716",
+   "identical": true
+  },
+  {
+   "run": 2,
+   "level": 1,
+   "descriptor": "probe/p-000001.vmdk",
+   "ours": "20375fadf9ef2878efc8ff7e531d12c71661df9a5849fd72ac4a91a219a9df15",
+   "data_bytes": 82313216,
+   "active_heartbeats": "1 (hosts were holding locks when this image was taken)",
+   "seconds_enter_to_vm_snapshot_done": 1.98,
+   "seconds_vm_snapshot_done_to_outer_snapshot_done": 7.63,
+   "frozen_order": {
+    "full_mib": 78,
+    "partly_written_mib": 1,
+    "in_order": true,
+    "data_beyond_the_copy": 0
+   },
+   "active_order": {
+    "error": "a-f200-0050568b0de0 when this image was taken (lock Exclusive); its newest writes may be missing while later ones are present. Take a VM snapshot before the storage snapshot and read the disk below it"
+   },
+   "frozen_delta": {
+    "length": 93585408,
+    "replay_journal": 0,
+    "journal_sectors_in_use": 324,
+    "allocated_grains": 18688,
+    "grains_beyond_the_file": 0,
+    "file": "probe/p-000001-sesparse.vmdk"
+   },
+   "active_delta": {
+    "length": 59506688,
+    "replay_journal": 1,
+    "journal_sectors_in_use": 324,
+    "allocated_grains": 8704,
+    "grains_beyond_the_file": 0,
+    "file": "probe/p-000002-sesparse.vmdk"
+   },
+   "esxi": "20375fadf9ef2878efc8ff7e531d12c71661df9a5849fd72ac4a91a219a9df15",
+   "identical": true
+  },
+  {
+   "run": 3,
+   "level": 2,
+   "descriptor": "probe/p-000002.vmdk",
+   "ours": "5ea77b34e9783511922caa5db094b69f60dcc418098d1071c71e70295860ecda",
+   "data_bytes": 160432128,
+   "active_heartbeats": "1 (hosts were holding locks when this image was taken)",
+   "seconds_enter_to_vm_snapshot_done": 3.13,
+   "seconds_vm_snapshot_done_to_outer_snapshot_done": 1.24,
+   "frozen_order": {
+    "full_mib": 153,
+    "partly_written_mib": 0,
+    "in_order": true,
+    "data_beyond_the_copy": 0
+   },
+   "active_order": {
+    "error": "a-f200-0050568b0de0 when this image was taken (lock Exclusive); its newest writes may be missing while later ones are present. Take a VM snapshot before the storage snapshot and read the disk below it"
+   },
+   "frozen_delta": {
+    "length": 93585408,
+    "replay_journal": 0,
+    "journal_sectors_in_use": 324,
+    "allocated_grains": 19072,
+    "grains_beyond_the_file": 0,
+    "file": "probe/p-000002-sesparse.vmdk"
+   },
+   "active_delta": {
+    "length": 8388608,
+    "replay_journal": 1,
+    "journal_sectors_in_use": 0,
+    "allocated_grains": 0,
+    "grains_beyond_the_file": 0,
+    "file": "probe/p-000003-sesparse.vmdk"
+   },
+   "esxi": "5ea77b34e9783511922caa5db094b69f60dcc418098d1071c71e70295860ecda",
+   "identical": true
+  },
+  {
+   "run": 4,
+   "level": 3,
+   "descriptor": "probe/p-000003.vmdk",
+   "ours": "77e23129a6c83e14df04b6f4c0c14653ea5c6a96fd601d769b9dd7adbb2785a7",
+   "data_bytes": 235143168,
+   "active_heartbeats": "1 (hosts were holding locks when this image was taken)",
+   "seconds_enter_to_vm_snapshot_done": 3.94,
+   "seconds_vm_snapshot_done_to_outer_snapshot_done": 0.81,
+   "frozen_order": {
+    "full_mib": 224,
+    "partly_written_mib": 1,
+    "in_order": true,
+    "data_beyond_the_copy": 0
+   },
+   "active_order": {
+    "error": "a-f200-0050568b0de0 when this image was taken (lock Exclusive); its newest writes may be missing while later ones are present. Take a VM snapshot before the storage snapshot and read the disk below it"
+   },
+   "frozen_delta": {
+    "length": 93585408,
+    "replay_journal": 0,
+    "journal_sectors_in_use": 324,
+    "allocated_grains": 18240,
+    "grains_beyond_the_file": 0,
+    "file": "probe/p-000003-sesparse.vmdk"
+   },
+   "active_delta": {
+    "length": 8388608,
+    "replay_journal": 1,
+    "journal_sectors_in_use": 0,
+    "allocated_grains": 0,
+    "grains_beyond_the_file": 0,
+    "file": "probe/p-000004-sesparse.vmdk"
+   },
+   "esxi": "77e23129a6c83e14df04b6f4c0c14653ea5c6a96fd601d769b9dd7adbb2785a7",
+   "identical": true
+  },
+  {
+   "run": 5,
+   "level": 4,
+   "descriptor": "probe/p-000004.vmdk",
+   "ours": "b4d6bdb8e2044a962a8938beee38909b57f816ed77f62a21381a1323e6a94a44",
+   "data_bytes": 274202624,
+   "active_heartbeats": "1 (hosts were holding locks when this image was taken)",
+   "seconds_enter_to_vm_snapshot_done": 0.98,
+   "seconds_vm_snapshot_done_to_outer_snapshot_done": 0.79,
+   "frozen_order": {
+    "full_mib": 261,
+    "partly_written_mib": 1,
+    "in_order": true,
+    "data_beyond_the_copy": 0
+   },
+   "active_order": {
+    "error": "a-f200-0050568b0de0 when this image was taken (lock Exclusive); its newest writes may be missing while later ones are present. Take a VM snapshot before the storage snapshot and read the disk below it"
+   },
+   "frozen_delta": {
+    "length": 59506688,
+    "replay_journal": 0,
+    "journal_sectors_in_use": 324,
+    "allocated_grains": 9536,
+    "grains_beyond_the_file": 0,
+    "file": "probe/p-000004-sesparse.vmdk"
+   },
+   "active_delta": {
+    "length": 8388608,
+    "replay_journal": 1,
+    "journal_sectors_in_use": 0,
+    "allocated_grains": 0,
+    "grains_beyond_the_file": 0,
+    "file": "probe/p-000005-sesparse.vmdk"
+   },
+   "esxi": "b4d6bdb8e2044a962a8938beee38909b57f816ed77f62a21381a1323e6a94a44",
+   "identical": true
+  },
+  {
+   "run": 6,
+   "level": 5,
+   "descriptor": "probe/p-000005.vmdk",
+   "ours": "13acbffb03c5284e324e768a9dc159f8d4a0f74421156e059d73b93249d08473",
+   "data_bytes": 352059392,
+   "active_heartbeats": "1 (hosts were holding locks when this image was taken)",
+   "seconds_enter_to_vm_snapshot_done": 2.07,
+   "seconds_vm_snapshot_done_to_outer_snapshot_done": 0.91,
+   "frozen_order": {
+    "full_mib": 335,
+    "partly_written_mib": 1,
+    "in_order": true,
+    "data_beyond_the_copy": 0
+   },
+   "active_order": {
+    "error": "a-f200-0050568b0de0 when this image was taken (lock Exclusive); its newest writes may be missing while later ones are present. Take a VM snapshot before the storage snapshot and read the disk below it"
+   },
+   "frozen_delta": {
+    "length": 93585408,
+    "replay_journal": 0,
+    "journal_sectors_in_use": 324,
+    "allocated_grains": 19008,
+    "grains_beyond_the_file": 0,
+    "file": "probe/p-000005-sesparse.vmdk"
+   },
+   "active_delta": {
+    "length": 8388608,
+    "replay_journal": 1,
+    "journal_sectors_in_use": 0,
+    "allocated_grains": 0,
+    "grains_beyond_the_file": 0,
+    "file": "probe/p-000006-sesparse.vmdk"
+   },
+   "esxi": "13acbffb03c5284e324e768a9dc159f8d4a0f74421156e059d73b93249d08473",
+   "identical": true
+  },
+  {
+   "run": 7,
+   "level": 6,
+   "descriptor": "probe/p-000006.vmdk",
+   "ours": "3a0f8156ecbab64963ac3b5816bcf8dcb7338d99d08871d9b6812a457542f167",
+   "data_bytes": 428605440,
+   "active_heartbeats": "1 (hosts were holding locks when this image was taken)",
+   "seconds_enter_to_vm_snapshot_done": 3.02,
+   "seconds_vm_snapshot_done_to_outer_snapshot_done": 0.8,
+   "frozen_order": {
+    "full_mib": 408,
+    "partly_written_mib": 1,
+    "in_order": true,
+    "data_beyond_the_copy": 0
+   },
+   "active_order": {
+    "error": "a-f200-0050568b0de0 when this image was taken (lock Exclusive); its newest writes may be missing while later ones are present. Take a VM snapshot before the storage snapshot and read the disk below it"
+   },
+   "frozen_delta": {
+    "length": 93585408,
+    "replay_journal": 0,
+    "journal_sectors_in_use": 324,
+    "allocated_grains": 18688,
+    "grains_beyond_the_file": 0,
+    "file": "probe/p-000006-sesparse.vmdk"
+   },
+   "active_delta": {
+    "length": 8388608,
+    "replay_journal": 1,
+    "journal_sectors_in_use": 0,
+    "allocated_grains": 0,
+    "grains_beyond_the_file": 0,
+    "file": "probe/p-000007-sesparse.vmdk"
+   },
+   "esxi": "3a0f8156ecbab64963ac3b5816bcf8dcb7338d99d08871d9b6812a457542f167",
+   "identical": true
+  }
+ ],
+ "final_delta_listing": [
+  "-rw-------    1 root     root      93585408 Nov 19 11:19 /vmfs/volumes/fp8/probe/p-000001-sesparse.vmdk",
+  "-rw-------    1 root     root      93585408 Nov 19 11:23 /vmfs/volumes/fp8/probe/p-000002-sesparse.vmdk",
+  "-rw-------    1 root     root      93585408 Nov 19 11:27 /vmfs/volumes/fp8/probe/p-000003-sesparse.vmdk",
+  "-rw-------    1 root     root      59506688 Nov 19 11:30 /vmfs/volumes/fp8/probe/p-000004-sesparse.vmdk",
+  "-rw-------    1 root     root      93585408 Nov 19 11:35 /vmfs/volumes/fp8/probe/p-000005-sesparse.vmdk",
+  "-rw-------    1 root     root      93585408 Nov 19 11:41 /vmfs/volumes/fp8/probe/p-000006-sesparse.vmdk",
+  "-rw-------    1 root     root      59506688 Nov 19 11:47 /vmfs/volumes/fp8/probe/p-000007-sesparse.vmdk"
+ ]
+}
