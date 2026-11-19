@@ -16,6 +16,9 @@ use openvmfs_testkit::{own_image, repo_root, sha256_hex, ExpectedDisk, JUNK_MAGI
 
 const MIB: u64 = 1 << 20;
 
+/// A test disk: name, disk id, size, and what was written as (first sector, count).
+type Plan = (&'static str, u32, u64, Vec<(u64, u64)>);
+
 fn volume() -> Volume {
     Volume::open_path(own_image("fixture-basic-esxi8-v1")).expect("open fixture")
 }
@@ -40,7 +43,7 @@ fn esxi_8_formats_the_same_version() {
 fn disks_read_what_was_written_and_what_esxi_8_read() {
     let volume = volume();
     // What `make_basic.sh` asked `pattern.py write` to write, as (first sector, count).
-    let plans: [(&str, u32, u64, Vec<(u64, u64)>); 4] = [
+    let plans: [Plan; 4] = [
         (
             "thin",
             1,
