@@ -40,6 +40,7 @@ checked against volumes that ESXi wrote; every statement carries a mark that say
 | How correctness is established, and how to run every check | [internals/testing.md](internals/testing.md) |
 | The test images in the repository and what each one proves | [../fixtures/vmfs6/README.md](../fixtures/vmfs6/README.md) |
 | Building a lab that produces ground truth: nested ESXi, capture, consistency experiments | [internals/lab.md](internals/lab.md) |
+| The same lab as OpenTofu / Terraform configuration | [../lab/tofu/README.md](../lab/tofu/README.md) |
 | Rules for contributions, in particular for using prior work | [../CONTRIBUTING.md](../CONTRIBUTING.md) |
 
 The API reference is generated from the source: `cargo doc --no-deps --open`. The C interface is documented in

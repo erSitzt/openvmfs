@@ -129,7 +129,7 @@ pub(crate) struct Inode {
     pub link_count: u32,
     pub length: u64,
     pub block_size: u64,
-    pub num_blocks: u64,
+    pub block_count: u64,
     pub mtime: u32,
     pub ctime: u32,
     pub atime: u32,
@@ -137,8 +137,8 @@ pub(crate) struct Inode {
     pub gid: u32,
     pub mode: u32,
     pub addressing: AddressingMode,
-    pub num_tbz_blocks: u64,
-    pub block_offset_shift: u8,
+    pub unwritten_blocks: u64,
+    pub block_shift: u8,
     /// How the file was locked, and by which host.
     pub lock_mode: LockMode,
     pub lock_owner: crate::Uuid,
@@ -150,11 +150,11 @@ impl Inode {
     /// Parses the descriptor `raw`, read from `volume_offset`, which must be the descriptor with address `addr`.
     pub(crate) fn parse(raw: &[u8], addr: FdAddr, volume_offset: u64, geo: &Geometry) -> Result<Inode> {
         let what = |problem: String| format!("file descriptor {addr} at volume offset {volume_offset:#x}: {problem}");
-        if raw.len() as u64 != geo.fd_size {
+        if raw.len() as u64 != geo.descriptor_size {
             return Err(Error::corrupt(what(format!(
                 "{} bytes read, expected {}",
                 raw.len(),
-                geo.fd_size
+                geo.descriptor_size
             ))));
         }
         let lock = View::new("file descriptor lock block", volume_offset, raw);
@@ -171,11 +171,11 @@ impl Inode {
             ))));
         }
 
-        let meta_offset = to_usize(geo.fd_meta_offset, "file metadata offset")?;
+        let meta_offset = to_usize(geo.metadata_offset, "file metadata offset")?;
         let meta_raw = raw.get(meta_offset..).unwrap_or_default();
         let meta = View::new(
             "file metadata",
-            volume_offset.saturating_add(geo.fd_meta_offset),
+            volume_offset.saturating_add(geo.metadata_offset),
             meta_raw,
         );
         let recorded_addr = meta.u32(0x00)?;
@@ -198,14 +198,14 @@ impl Inode {
             6 => FileKind::RawDeviceMap,
             other => return Err(Error::corrupt(what(format!("descriptor type {other}")))),
         };
-        let num_cow_blocks = u64::from(meta.u32(0x4C)?) | (u64::from(meta.u32(0x58)?) << 32);
-        if num_cow_blocks != 0 {
+        let copy_on_write_blocks = u64::from(meta.u32(0x4C)?) | (u64::from(meta.u32(0x58)?) << 32);
+        if copy_on_write_blocks != 0 {
             return Err(Error::unsupported(what(format!(
-                "{num_cow_blocks} copy-on-write blocks; copy-on-write files have not been verified"
+                "{copy_on_write_blocks} copy-on-write blocks; copy-on-write files have not been verified"
             ))));
         }
 
-        let addrs_offset = to_usize(geo.fd_addrs_offset, "address array offset")?;
+        let addrs_offset = to_usize(geo.address_array_offset, "address array offset")?;
         let addr_count = to_usize(geo.fd_addr_count, "address array length")?;
         let addrs_raw = View::new("file descriptor address array", volume_offset, raw)
             .bytes(addrs_offset, addr_count.saturating_mul(8))?;
@@ -222,7 +222,7 @@ impl Inode {
             link_count: meta.u32(0x08)?,
             length: meta.u64(0x14)?,
             block_size: meta.u64(0x1C)?,
-            num_blocks: meta.u64(0x24)?,
+            block_count: meta.u64(0x24)?,
             mtime: meta.u32(0x2C)?,
             ctime: meta.u32(0x30)?,
             atime: meta.u32(0x34)?,
@@ -231,8 +231,8 @@ impl Inode {
             mode: meta.u32(0x40)?,
             addressing: AddressingMode::from_raw(meta.u32(0x44)?)
                 .map_err(|e| e.context(format!("file descriptor {addr} at volume offset {volume_offset:#x}")))?,
-            num_tbz_blocks: u64::from(meta.u32(0x48)?) | (u64::from(meta.u32(0x54)?) << 32),
-            block_offset_shift: meta.u8(0x89)?,
+            unwritten_blocks: u64::from(meta.u32(0x48)?) | (u64::from(meta.u32(0x54)?) << 32),
+            block_shift: meta.u8(0x89)?,
             lock_mode: LockMode::from_raw(lock.u32(0x24)?),
             lock_owner: lock.uuid(0x28)?,
             addrs,
@@ -305,7 +305,7 @@ pub(crate) mod tests {
         assert_eq!(inode.kind, FileKind::Regular);
         assert_eq!(inode.addressing, AddressingMode::FileBlocks);
         assert_eq!(inode.length, 3 << 20);
-        assert_eq!(inode.block_offset_shift, 20);
+        assert_eq!(inode.block_shift, 20);
         assert_eq!(inode.addrs.len(), 320);
         assert_eq!(&inode.addrs[..4], &[0x11, 0x21, 0x31, 0]);
         assert!(!inode.is_dir());

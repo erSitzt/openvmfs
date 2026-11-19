@@ -1,0 +1,9 @@
+vcenter_server = "vcenter.example.org"
+vcenter_user   = "lab-user@vsphere.local"
+# vcenter_password: set TF_VAR_vcenter_password in the environment instead of writing it here.
+datacenter = "DC1"
+cluster    = "Cluster1"
+datastore  = "datastore1"
+network    = "VM Network"
+folder     = "openvmfs-lab"
+esxi_iso   = "ISO/VMware-VMvisor-Installer-7.0U3-ks.iso"

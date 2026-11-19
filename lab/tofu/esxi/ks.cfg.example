@@ -1,0 +1,15 @@
+# Kickstart for an unattended ESXi install in the lab. Put it into the installer ISO (see README) and change the
+# password: this file ends up on a datastore.
+vmaccepteula
+install --firstdisk=local --overwritevmfs
+rootpw CHANGE-ME-before-building-the-iso
+network --bootproto=dhcp --device=vmnic0
+reboot
+
+%firstboot --interpreter=busybox
+# SSH and the shell for the recipes; no warnings about them.
+vim-cmd hostsvc/enable_ssh
+vim-cmd hostsvc/start_ssh
+vim-cmd hostsvc/enable_esx_shell
+vim-cmd hostsvc/start_esx_shell
+esxcli system settings advanced set -o /UserVars/SuppressShellWarning -i 1

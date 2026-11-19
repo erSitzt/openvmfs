@@ -15,3 +15,12 @@ bindings/dotnet/**/obj/
 .vs/
 .idea/
 .vscode/
+
+# OpenTofu / Terraform state and local variables of the lab
+lab/tofu/**/.terraform/
+lab/tofu/**/*.tfstate*
+lab/tofu/**/terraform.tfvars
+
+# Python byte code
+__pycache__/
+*.pyc

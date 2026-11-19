@@ -10,8 +10,10 @@ code from them.
    the oracle container.
 2. **Write down what you learned** in `docs/format/`, in your own words: structures, algorithms, where the
    implementations differ. Every fact gets its source and a confidence mark (see `docs/format/00-overview.md`).
-3. **Write your own code from that description.** Do not copy or translate files, functions, tables, comments or
-   tests. A line-by-line port is copying. Our design differs on purpose: block maps are resolved once and are
+3. **Write your own code from that description**, with the other implementation closed. Do not copy or
+   translate files, functions, tables, comments or tests, and do not take over names that another author
+   invented: use the names of ESXi's own tools where they exist and descriptive ones of our own elsewhere. A
+   line-by-line port is copying. Our design differs on purpose: block maps are resolved once and are
    immutable, addresses are typed, and unverified layouts are refused.
 4. **Let ESXi decide.** When implementations disagree, or only one of them knows a detail, build a fixture and
    check.

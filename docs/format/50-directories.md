@@ -40,7 +40,8 @@ Every block starts with a 64-byte header:
 ### Allocation map block (type 3)
 
 After the header, four bits describe each block of the directory, **the high half of each byte first** **[V]**:
-bits 0–1 are the block's type, bit 2 says it is free, bit 3 that it was never written. One map block describes
+bits 0–1 are the block's type, bit 2 says it still has free slots (an entry block with live entries and room has
+code 5 **[V]**), bit 3 that it was never written. One map block describes
 `2 × (4096 − 64)` blocks; the block number is `map index × that + position`.
 
 ### Entry block (type 1)
@@ -67,8 +68,9 @@ OpenVmfs is strict here: the listed block must have type 1, the map block type 3
 block, names must be valid UTF-8 without `/`, addresses must be file descriptor addresses, and the number of
 entries found must equal the count in the header. Directory blocks must be backed by written data.
 
-Whether the "free" and "never written" bits of the map need to be honoured when listing is **[?]**. On the samples
-the count always matched without looking at them.
+The other bits of the map are not needed for listing. Bit 2 marks blocks with free slots, not free blocks: after a
+file was deleted, the block that held it still had live entries and code 5 **[V]**. ESXi clears a freed slot and
+sets its bit in the block's bitmap **[V]**; a slot marked in use that holds no entry is treated as damage.
 
 ## Lookup by name
 

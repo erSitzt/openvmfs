@@ -234,14 +234,14 @@ impl Builder<'_> {
             return Ok(());
         }
         if inode.addressing == AddressingMode::Resident {
-            if inode.length > self.geo.fd_data_size {
+            if inode.length > self.geo.resident_capacity {
                 return Err(Error::corrupt(format!(
                     "resident file of {} bytes, but a descriptor holds at most {}",
-                    inode.length, self.geo.fd_data_size
+                    inode.length, self.geo.resident_capacity
                 ))
                 .into());
             }
-            let volume_offset = add(inode.volume_offset, self.geo.fd_data_offset, "resident data offset")?;
+            let volume_offset = add(inode.volume_offset, self.geo.resident_offset, "resident data offset")?;
             self.push(inode.length, ExtentKind::Data { volume_offset })?;
             return Ok(());
         }
@@ -253,10 +253,10 @@ impl Builder<'_> {
             ))
             .into());
         }
-        if 1u64.checked_shl(u32::from(inode.block_offset_shift)) != Some(inode.block_size) {
+        if 1u64.checked_shl(u32::from(inode.block_shift)) != Some(inode.block_size) {
             return Err(Error::unsupported(format!(
                 "block size {} does not match block offset shift {}",
-                inode.block_size, inode.block_offset_shift
+                inode.block_size, inode.block_shift
             ))
             .into());
         }

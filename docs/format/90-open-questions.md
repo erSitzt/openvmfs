@@ -8,9 +8,9 @@ by ESXi that holds reference data whose position is known.
 | # | Question | How to settle it |
 |---|---|---|
 | 1 | **"To be zeroed" bitmaps other than bit 7 on a small file block.** Bit 7 is settled (see [40-file-descriptor.md](40-file-descriptor.md)). Are other bits ever set, for example with another granularity? | Refused until seen. |
-| 4 | **Sub-block and small-file-block addresses with large numbers.** The two implementation families disagree: cluster in bits 6–41 and resource in bits 56–63, versus fewer cluster bits; cluster in bits 15–45 and resource in bits 51–63, versus 17 and 9 bits. They agree up to sub-block cluster 255 and small-block cluster 131071. | A datastore with more than 65536 sub-blocks in use (many small files), and eventually a volume above 64 TiB. |
+| 4 | **Sub-block and small-file-block addresses with large numbers.** The two implementation families disagree: cluster in bits 6–41 and resource in bits 56–63, versus fewer cluster bits; cluster in bits 15–45 and resource in bits 51–63, versus 17 and 9 bits. They agree up to sub-block cluster 255 and small-block cluster 131071. | Small file blocks: both readings agree below 64 TiB. Sub-blocks: they agree up to cluster 255; OpenVmfs refuses higher clusters. Addresses in `.pb2.sf`: they agree only on the first one; OpenVmfs refuses others. A datastore with about 70,000 small files would settle both. |
 | 5 | **Resource files with nested cluster groups** (flag 0x2) for descriptors, sub-blocks or pointer blocks. | Not seen yet outside `.fbb.sf`; refuse until seen. |
-| 6 | **Pointer blocks stored in file blocks or in `.pbc.sf`.** | Not seen on VMFS6; refuse until seen. |
+| 6 | **Pointer blocks stored in file blocks or in `.pbc.sf`.** | Not seen on VMFS6 (`.pbc.sf` is empty even at 17 TiB); refused. |
 
 ## Volumes OpenVmfs refuses today
 
@@ -26,7 +26,7 @@ by ESXi that holds reference data whose position is known.
 | # | Question |
 |---|---|
 | 12 | **The journal.** Files that a host has open for writing need journal replay to be read correctly; closed and read-only files did not in 9 of 9 runs of the backup order (VM snapshot, then storage snapshot); see [`../consistency.md`](../consistency.md). The transaction format for block allocations is known ([`60-heartbeat-journal.md`](60-heartbeat-journal.md)). Open: checksums, transactions larger than one slot, other entry types (file creation, deletion, directory changes), several hosts, other ESXi versions. |
-| 13 | Directory allocation map: must the "free" and "never written" bits be honoured? |
+| 13 | Directory allocation map: bit 2 is set on entry blocks that still have free slots (a block with live entries has code 5), so it must not be used to skip blocks **[V]**. More than one allocation map block (above about 112,000 entries) has not been seen. |
 | 15 | Copy-on-write addresses: when does ESXi set the bit? (Refused today.) |
 
 ## Virtual disks

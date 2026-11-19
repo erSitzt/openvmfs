@@ -88,7 +88,7 @@ pub(crate) fn read_dir(dir: &dyn BlockSource, geo: &Geometry) -> Result<Vec<DirE
             "directory header version {version:#010x} (only {HEADER_VERSION:#010x} has been verified)"
         )));
     }
-    let num_entries = header.u32(0x04)?;
+    let entry_count = header.u32(0x04)?;
     let num_map_blocks = header.u32(0x0C)?;
     if num_map_blocks > MAX_ALLOCATION_MAP_BLOCKS {
         return Err(Error::corrupt(format!(
@@ -96,43 +96,52 @@ pub(crate) fn read_dir(dir: &dyn BlockSource, geo: &Geometry) -> Result<Vec<DirE
         )));
     }
 
-    // "." and ".." live in the header and count as entries.
-    let mut remaining = u64::from(num_entries);
-    for offset in [0x3B8usize, 0x4D8] {
-        let entry = View::new(
-            "directory header entry",
-            offset as u64,
-            header.bytes(offset, ENTRY_BYTES)?,
-        );
-        if entry.u32(0x04)? != 0 {
-            remaining = remaining.saturating_sub(1);
-        }
+    // The header's count includes "." and "..", which are stored in the header itself.
+    let in_header = [0x3B8usize, 0x4D8]
+        .into_iter()
+        .map(|offset| {
+            Ok(u64::from(
+                header.bytes(offset, ENTRY_BYTES)?.get(4..8) != Some(&[0u8; 4][..]),
+            ))
+        })
+        .sum::<Result<u64>>()?;
+    let expected = u64::from(entry_count).checked_sub(in_header).ok_or_else(|| {
+        Error::corrupt(format!(
+            "directory header counts {entry_count} entries, fewer than it holds itself"
+        ))
+    })?;
+
+    let mut entries = Vec::new();
+    for block in entry_blocks(dir, &header, num_map_blocks, geo)? {
+        read_entry_block(dir, block, geo, &mut entries)?;
     }
+    if entries.len() as u64 != expected {
+        return Err(Error::corrupt(format!(
+            "directory header counts {entry_count} entries, but its blocks hold {} besides the header's {in_header}",
+            entries.len()
+        )));
+    }
+    Ok(entries)
+}
 
-    let block_size = geo.md_alignment;
-    let slots_per_block = block_size.saturating_sub(BLOCK_HEADER_SIZE) / ENTRY_SIZE;
-    // An allocation map block describes two blocks per byte of its payload.
-    let blocks_per_map = mul(
-        block_size.saturating_sub(BLOCK_HEADER_SIZE),
-        2,
-        "blocks per allocation map",
-    )?;
-    let block_offset = |block: u64| -> Result<u64> {
-        add(
-            HEADER_BLOCK_SIZE,
-            mul(block, block_size, "directory block offset")?,
-            "directory block offset",
-        )
-    };
+fn block_offset(block: u64, geo: &Geometry) -> Result<u64> {
+    add(
+        HEADER_BLOCK_SIZE,
+        mul(block, geo.metadata_block_size, "directory block offset")?,
+        "directory block offset",
+    )
+}
 
-    let mut entries = Vec::with_capacity(to_usize(remaining.min(1 << 16), "directory entry count")?);
-    'maps: for map_index in 0..num_map_blocks {
-        if remaining == 0 {
-            break;
-        }
-        let list_index = to_usize(u64::from(map_index), "allocation map index")?;
-        let map_block = u64::from(header.u32(0x10usize.saturating_add(list_index.saturating_mul(4)))?);
-        let map_offset = block_offset(map_block)?;
+/// The numbers of the blocks that hold entries, from the allocation maps: four bits per block, the block's type in
+/// the low two. (Bit 2 is set on blocks that still have free slots, bit 3 on blocks never written.)
+fn entry_blocks(dir: &dyn BlockSource, header: &View<'_>, map_count: u32, geo: &Geometry) -> Result<Vec<u64>> {
+    let block_size = geo.metadata_block_size;
+    let payload = block_size.saturating_sub(BLOCK_HEADER_SIZE);
+    let mut blocks = Vec::new();
+    for map_index in 0..u64::from(map_count) {
+        let listed = to_usize(mul(map_index, 4, "allocation map list")?, "allocation map list")?;
+        let map_block = u64::from(header.u32(0x10usize.saturating_add(listed))?);
+        let map_offset = block_offset(map_block, geo)?;
         let raw_map = read_vec(dir, map_offset, block_size, "directory allocation map")?;
         let map = View::new("directory allocation map", map_offset, &raw_map);
         let map_type = map.u16(0x02)?;
@@ -141,73 +150,72 @@ pub(crate) fn read_dir(dir: &dyn BlockSource, geo: &Geometry) -> Result<Vec<DirE
                 "directory block {map_block} is listed as an allocation map but has type {map_type}"
             )));
         }
-        let nibbles = map.bytes(
-            BLOCK_HEADER_BYTES,
-            to_usize(block_size.saturating_sub(BLOCK_HEADER_SIZE), "map size")?,
+        // Every map describes the same number of blocks: two per byte.
+        let first = mul(
+            map_index,
+            mul(payload, 2, "blocks per allocation map")?,
+            "directory block number",
         )?;
-
-        for (byte_index, byte) in nibbles.iter().enumerate() {
-            // Four bits per block, the high nibble first: two bits of block type, then "free" and "not written".
-            for (half, nibble) in [byte >> 4, byte & 0x0F].into_iter().enumerate() {
-                if u16::from(nibble & 0b0011) != BLOCK_TYPE_ENTRIES {
-                    continue;
-                }
-                let block = add(
-                    mul(u64::from(map_index), blocks_per_map, "directory block number")?,
-                    (byte_index as u64).saturating_mul(2).saturating_add(half as u64),
-                    "directory block number",
-                )?;
-                let offset = block_offset(block)?;
-                if add(offset, block_size, "directory block end")? > dir.len() {
-                    return Err(Error::corrupt(format!(
-                        "directory entry block {block} lies beyond the end of the directory ({:#x} bytes)",
-                        dir.len()
-                    )));
-                }
-                let raw_block = read_vec(dir, offset, block_size, "directory entry block")?;
-                let entry_block = View::new("directory entry block", offset, &raw_block);
-                let block_type = entry_block.u16(0x02)?;
-                if block_type != BLOCK_TYPE_ENTRIES {
-                    return Err(Error::corrupt(format!(
-                        "directory block {block} is mapped as an entry block but has type {block_type}"
-                    )));
-                }
-                let total_slots = u64::from(entry_block.u16(0x04)?);
-                if total_slots > slots_per_block {
-                    return Err(Error::corrupt(format!(
-                        "directory entry block {block} claims {total_slots} slots, at most {slots_per_block} fit"
-                    )));
-                }
-                let bitmap = entry_block.bytes(0x08, 56)?;
-                for slot in 0..total_slots {
-                    // A clear bit marks a slot that is in use.
-                    let byte = bitmap.get(to_usize(slot / 8, "slot")?).copied().unwrap_or(0xFF);
-                    if (byte >> (slot % 8)) & 1 != 0 {
-                        continue;
-                    }
-                    let slot_offset = to_usize(
-                        add(BLOCK_HEADER_SIZE, mul(slot, ENTRY_SIZE, "slot offset")?, "slot offset")?,
-                        "slot offset",
-                    )?;
-                    let slot_view = View::new("directory entry", offset, entry_block.bytes(slot_offset, ENTRY_BYTES)?);
-                    if let Some(entry) = parse_entry(&slot_view)? {
-                        entries.push(entry);
-                    }
-                    remaining = remaining.saturating_sub(1);
-                    if remaining == 0 {
-                        break 'maps;
-                    }
-                }
+        let nibbles = map.bytes(BLOCK_HEADER_BYTES, to_usize(payload, "map size")?)?;
+        let codes = nibbles.iter().flat_map(|byte| [byte >> 4, byte & 0x0F]);
+        for (position, code) in codes.enumerate() {
+            if u16::from(code & 0b0011) == BLOCK_TYPE_ENTRIES {
+                blocks.push(add(first, position as u64, "directory block number")?);
             }
         }
     }
+    Ok(blocks)
+}
 
-    if remaining != 0 {
+/// Appends the entries of one entry block: the slots whose bit in the block's bitmap is clear.
+fn read_entry_block(dir: &dyn BlockSource, block: u64, geo: &Geometry, entries: &mut Vec<DirEntry>) -> Result<()> {
+    let block_size = geo.metadata_block_size;
+    let offset = block_offset(block, geo)?;
+    if add(offset, block_size, "directory block end")? > dir.len() {
         return Err(Error::corrupt(format!(
-            "directory header counts {num_entries} entries, but {remaining} of them were not found in its blocks"
+            "directory entry block {block} lies beyond the end of the directory ({:#x} bytes)",
+            dir.len()
         )));
     }
-    Ok(entries)
+    let raw_block = read_vec(dir, offset, block_size, "directory entry block")?;
+    let entry_block = View::new("directory entry block", offset, &raw_block);
+    let block_type = entry_block.u16(0x02)?;
+    if block_type != BLOCK_TYPE_ENTRIES {
+        return Err(Error::corrupt(format!(
+            "directory block {block} is mapped as an entry block but has type {block_type}"
+        )));
+    }
+    let slots_per_block = block_size.saturating_sub(BLOCK_HEADER_SIZE) / ENTRY_SIZE;
+    let total_slots = u64::from(entry_block.u16(0x04)?);
+    if total_slots > slots_per_block {
+        return Err(Error::corrupt(format!(
+            "directory entry block {block} claims {total_slots} slots, at most {slots_per_block} fit"
+        )));
+    }
+    let free = entry_block.bytes(0x08, 56)?;
+    for slot in 0..total_slots {
+        let is_free = free
+            .get(to_usize(slot / 8, "slot")?)
+            .is_none_or(|byte| byte & (1u8 << (slot % 8)) != 0);
+        if is_free {
+            continue;
+        }
+        let slot_offset = to_usize(
+            add(BLOCK_HEADER_SIZE, mul(slot, ENTRY_SIZE, "slot offset")?, "slot offset")?,
+            "slot offset",
+        )?;
+        let slot_view = View::new("directory entry", offset, entry_block.bytes(slot_offset, ENTRY_BYTES)?);
+        match parse_entry(&slot_view)? {
+            Some(entry) => entries.push(entry),
+            // ESXi clears a slot when it frees it. A slot marked in use without an address has not been seen.
+            None => {
+                return Err(Error::corrupt(format!(
+                    "slot {slot} of directory entry block {block} is marked in use but holds no entry"
+                )));
+            }
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -230,7 +238,7 @@ pub(crate) mod tests {
         dir[0..4].copy_from_slice(&HEADER_VERSION.to_le_bytes());
         dir[4..8].copy_from_slice(&(entries.len() as u32 + 2).to_le_bytes());
         dir[0x0C..0x10].copy_from_slice(&1u32.to_le_bytes());
-        // Allocation map is block 0; allocationMapBlocks[0] = 0.
+        // The allocation map is block 0, which is what the zeroed list in the header says.
         put_entry(&mut dir, 0x3B8, 2, 4, ".");
         put_entry(&mut dir, 0x4D8, 2, 4, "..");
 

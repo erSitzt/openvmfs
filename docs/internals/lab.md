@@ -4,6 +4,9 @@ Everything OpenVmfs knows was checked against volumes that ESXi wrote. This page
 such volumes, so that anyone can repeat an experiment or add a new one. It needs a vSphere environment where you
 may create one VM, and nothing else.
 
+The VM, its test disks, the datastores and the guests can also be created from the OpenTofu configuration in
+[`lab/tofu`](../../lab/tofu/README.md).
+
 Commands are given with [`govc`](https://github.com/vmware/govmomi/tree/main/govc) and the ESXi shell. Names are
 examples.
 

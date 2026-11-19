@@ -15,19 +15,19 @@ use crate::io::BlockSource;
 const RESOURCE_FILE_SIGNATURE: u32 = 0x7266_6D64;
 pub(crate) const RESOURCE_HEADER_SIZE: usize = 0x58;
 /// Flag bit: the cluster groups of this file are nested inside those of a parent resource.
-const FLAG_HAS_PARENT: u32 = 0x2;
+const FLAG_NESTED: u32 = 0x2;
 
 /// The layout header of a resource file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct ResourceHeader {
     pub resources_per_cluster: u64,
     pub clusters_per_group: u64,
-    pub cluster_group_offset: u64,
+    pub first_group_offset: u64,
     pub resource_size: u64,
-    pub cluster_group_size: u64,
-    pub num_cluster_groups: u64,
+    pub group_size: u64,
+    pub group_count: u64,
     pub flags: u32,
-    pub child_meta_offset: u32,
+    pub nested_header_offset: u32,
 }
 
 impl ResourceHeader {
@@ -42,12 +42,12 @@ impl ResourceHeader {
         let header = ResourceHeader {
             resources_per_cluster: u64::from(h.u32(0x00)?),
             clusters_per_group: u64::from(h.u32(0x04)?),
-            cluster_group_offset: u64::from(h.u32(0x08)?),
+            first_group_offset: u64::from(h.u32(0x08)?),
             resource_size: u64::from(h.u32(0x0C)?),
-            cluster_group_size: u64::from(h.u32(0x10)?),
-            num_cluster_groups: u64::from(h.u32(0x18)?),
+            group_size: u64::from(h.u32(0x10)?),
+            group_count: u64::from(h.u32(0x18)?),
             flags: h.u32(0x28)?,
-            child_meta_offset: h.u32(0x34)?,
+            nested_header_offset: h.u32(0x34)?,
         };
         // A resource file may be empty: on VMFS6 the pointer-block file `.pbc.sf` holds no resources, because
         // pointer blocks are stored as sub-blocks. Addresses into an empty file are rejected in `resource_offset`.
@@ -59,7 +59,7 @@ impl ResourceHeader {
     /// A cluster group starts with one header (a lock block and a metadata block) per cluster; the resources of
     /// all its clusters follow.
     pub(crate) fn resource_offset(&self, cluster: u64, resource: u64, geo: &Geometry, file: &str) -> Result<u64> {
-        if self.flags & FLAG_HAS_PARENT != 0 {
+        if self.flags & FLAG_NESTED != 0 {
             return Err(Error::unsupported(format!(
                 "{file}: resource file with nested cluster groups (flags {:#x}) has not been verified",
                 self.flags
@@ -67,29 +67,29 @@ impl ResourceHeader {
         }
         // An empty file has 0 clusters per group; `u64::MAX` then fails the range check below.
         let group = cluster.checked_div(self.clusters_per_group).unwrap_or(u64::MAX);
-        let cluster_in_group = cluster.checked_rem(self.clusters_per_group).unwrap_or(0);
-        if resource >= self.resources_per_cluster || group >= self.num_cluster_groups {
+        let position_in_group = cluster.checked_rem(self.clusters_per_group).unwrap_or(0);
+        if resource >= self.resources_per_cluster || group >= self.group_count {
             return Err(Error::corrupt(format!(
                 "{file}: address <cluster {cluster}, resource {resource}> is outside the file's {} cluster groups \
                  of {} clusters with {} resources each",
-                self.num_cluster_groups, self.clusters_per_group, self.resources_per_cluster
+                self.group_count, self.clusters_per_group, self.resources_per_cluster
             )));
         }
-        let cluster_header_size = mul(geo.md_alignment, 2, "cluster header size")?;
+        let header_size_per_cluster = mul(geo.metadata_block_size, 2, "cluster header size")?;
         let cluster_size = mul(self.resources_per_cluster, self.resource_size, "cluster size")?;
         let mut offset = add(
-            self.cluster_group_offset,
-            mul(group, self.cluster_group_size, "cluster group offset")?,
+            self.first_group_offset,
+            mul(group, self.group_size, "cluster group offset")?,
             "cluster group offset",
         )?;
         offset = add(
             offset,
-            mul(self.clusters_per_group, cluster_header_size, "cluster headers")?,
+            mul(self.clusters_per_group, header_size_per_cluster, "cluster headers")?,
             "resource area",
         )?;
         offset = add(
             offset,
-            mul(cluster_in_group, cluster_size, "cluster offset")?,
+            mul(position_in_group, cluster_size, "cluster offset")?,
             "cluster offset",
         )?;
         add(

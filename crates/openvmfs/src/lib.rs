@@ -74,10 +74,10 @@ impl fmt::Display for Uuid {
     /// Formats the UUID the way ESXi prints it, for example `68626f2d-90e23158-8a2e-bc2411b17e28`.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let b = &self.0;
-        let time_lo = u32::from_le_bytes([b[0], b[1], b[2], b[3]]);
-        let time_hi = u32::from_le_bytes([b[4], b[5], b[6], b[7]]);
+        let seconds = u32::from_le_bytes([b[0], b[1], b[2], b[3]]);
+        let fraction = u32::from_le_bytes([b[4], b[5], b[6], b[7]]);
         let rand = u16::from_le_bytes([b[8], b[9]]);
-        write!(f, "{time_lo:08x}-{time_hi:08x}-{rand:04x}-")?;
+        write!(f, "{seconds:08x}-{fraction:08x}-{rand:04x}-")?;
         for byte in &b[10..16] {
             write!(f, "{byte:02x}")?;
         }

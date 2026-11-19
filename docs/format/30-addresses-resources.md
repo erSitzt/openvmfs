@@ -37,8 +37,10 @@ Bit 0 is the least significant bit; ranges are inclusive.
 | JB | 3–15 | cluster | **[1]** |
 | | 26–31 | resource | **[1]** |
 
-All other bits have no known meaning. OpenVmfs refuses an address in which one of them is set, and any address
-with the copy-on-write bit.
+Bit 5 is read as copy-on-write by one implementation family and as the VMFS5 form of "to be zeroed" by the
+other; it was never seen set on VMFS6. All other bits have no known meaning. OpenVmfs refuses an address in which one of them is set, any address
+with bit 5, sub-block addresses above cluster 255, addresses in `.pb2.sf` other than the first, and pointer block
+addresses of type 3: for those the implementations disagree or no sample exists.
 
 The two implementation families read SFB and SB addresses differently once numbers get large
 (see [open questions](90-open-questions.md)). The layout above is the wider one; both agree on the values seen so

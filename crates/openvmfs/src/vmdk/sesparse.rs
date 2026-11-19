@@ -63,7 +63,7 @@ impl SeSparse {
                 "SESparse header: magic {magic:#018x}, expected {CONST_MAGIC:#018x}"
             )));
         }
-        // The format has no public description. Accept exactly what ESXi was seen to write.
+        // Every field is compared with the value found in deltas written by ESXi 7.0.3 (docs/format/80-sesparse.md).
         let expect = |name: &str, offset: usize, expected: u64| -> Result<()> {
             let value = header.u64(offset)?;
             if value == expected {

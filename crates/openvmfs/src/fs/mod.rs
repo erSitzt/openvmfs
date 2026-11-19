@@ -163,8 +163,8 @@ impl FileStat {
             kind: inode.kind,
             is_dir: inode.is_dir(),
             len: inode.length,
-            blocks: inode.num_blocks,
-            tbz_blocks: inode.num_tbz_blocks,
+            blocks: inode.block_count,
+            tbz_blocks: inode.unwritten_blocks,
             addressing: inode.addressing,
             mtime: inode.mtime,
             ctime: inode.ctime,
@@ -265,9 +265,31 @@ struct Resolver<'a> {
 impl AddressSpace for Resolver<'_> {
     fn read_pointer_block(&self, raw: u64) -> std::result::Result<Vec<u64>, MapError> {
         let (which, cluster, resource) = match Addr::decode(raw)? {
-            Addr::SubBlock { cluster, resource } => (SystemFile::SubBlocks, cluster, resource),
-            Addr::PointerBlock { cluster, resource } => (SystemFile::PointerBlocks, cluster, resource),
-            Addr::PointerBlock2 { cluster, resource } => (SystemFile::PointerBlocks2, cluster, resource),
+            Addr::SubBlock { cluster, resource } => {
+                self.check_sub_block_cluster(raw, cluster)?;
+                (SystemFile::SubBlocks, cluster, resource)
+            }
+            // VMFS6 keeps `.pbc.sf` empty; an address into it has never been seen.
+            Addr::PointerBlock { cluster, resource } => {
+                if !self.geo.accept_unverified {
+                    return Err(Error::unsupported(format!(
+                        "pointer block address {raw:#018x} of type 3 (in .pbc.sf), which VMFS6 was never seen to use"
+                    ))
+                    .into());
+                }
+                (SystemFile::PointerBlocks, cluster, resource)
+            }
+            // The other implementations read these addresses differently; they agree only on the first one.
+            Addr::PointerBlock2 { cluster, resource } => {
+                if (cluster, resource) != (0, 0) && !self.geo.accept_unverified {
+                    return Err(Error::unsupported(format!(
+                        "pointer block address {raw:#018x} in .pb2.sf other than the first one; its layout has not \
+                         been verified"
+                    ))
+                    .into());
+                }
+                (SystemFile::PointerBlocks2, cluster, resource)
+            }
             Addr::SmallFileBlock { .. } | Addr::LargeFileBlock { .. } => {
                 return Err(Error::unsupported(format!(
                     "pointer block stored in a file block (address {raw:#018x}) has not been verified"
@@ -295,6 +317,7 @@ impl AddressSpace for Resolver<'_> {
     }
 
     fn sub_block_offset(&self, cluster: u64, resource: u64) -> std::result::Result<u64, MapError> {
+        self.check_sub_block_cluster(cluster << 6 | resource << 56 | 2, cluster)?;
         let file = self.resources.get(SystemFile::SubBlocks)?;
         if file.header.resource_size != self.geo.sub_block_size {
             return Err(Error::corrupt(format!(
@@ -304,6 +327,21 @@ impl AddressSpace for Resolver<'_> {
             .into());
         }
         Ok(file.locate(cluster, resource, self.geo)?)
+    }
+}
+
+impl Resolver<'_> {
+    /// Sub-block addresses are read differently by the other implementations once the cluster number needs more
+    /// than eight bits. Up to there they agree, and that is as far as our fixtures go.
+    fn check_sub_block_cluster(&self, raw: u64, cluster: u64) -> std::result::Result<(), MapError> {
+        if cluster >= 256 && !self.geo.accept_unverified {
+            return Err(Error::unsupported(format!(
+                "sub-block address {raw:#018x} names cluster {cluster}; the layout of sub-block addresses above \
+                 cluster 255 has not been verified"
+            ))
+            .into());
+        }
+        Ok(())
     }
 }
 
@@ -435,7 +473,7 @@ impl Volume {
         // The root directory is reachable two ways: through the fixed position used while opening, and through
         // the file-descriptor resource file like every other file. They must agree.
         let root = inner.read_inode(FdAddr::ROOT)?;
-        let expected = inner.geo.sfd_offset(0)?;
+        let expected = inner.geo.system_descriptor_offset(0)?;
         if root.volume_offset != expected {
             return Err(Error::unsupported(format!(
                 "the root directory's descriptor is at volume offset {:#x}, expected {expected:#x}; \
@@ -546,7 +584,7 @@ impl Volume {
         read_vec(
             &*self.inner.volume,
             inode.volume_offset,
-            self.inner.geo.fd_size,
+            self.inner.geo.descriptor_size,
             "file descriptor",
         )
     }
@@ -623,14 +661,14 @@ impl VolumeInner {
 
     fn read_inode(&self, addr: FdAddr) -> Result<Inode> {
         let file = self.resources.get(SystemFile::FileDescriptors).map_err(fatal)?;
-        if file.header.resource_size != self.geo.fd_size {
+        if file.header.resource_size != self.geo.descriptor_size {
             return Err(Error::corrupt(format!(
                 ".fdc.sf: resources are {} bytes, but a file descriptor is {} bytes",
-                file.header.resource_size, self.geo.fd_size
+                file.header.resource_size, self.geo.descriptor_size
             )));
         }
         let offset = file.locate(addr.cluster(), addr.resource(), &self.geo)?;
-        let raw = read_vec(&*self.volume, offset, self.geo.fd_size, "file descriptor")?;
+        let raw = read_vec(&*self.volume, offset, self.geo.descriptor_size, "file descriptor")?;
         Inode::parse(&raw, addr, offset, &self.geo)
     }
 
@@ -709,8 +747,8 @@ fn open_resources(volume: &dyn BlockSource, geo: &Geometry) -> Result<Resources>
 }
 
 fn read_system_inode(volume: &dyn BlockSource, geo: &Geometry, number: u32) -> Result<Inode> {
-    let offset = geo.sfd_offset(u64::from(number))?;
-    let raw = read_vec(volume, offset, geo.fd_size, "system file descriptor")?;
+    let offset = geo.system_descriptor_offset(u64::from(number))?;
+    let raw = read_vec(volume, offset, geo.descriptor_size, "system file descriptor")?;
     let inode = Inode::parse(&raw, FdAddr::system(number), offset, geo)?;
     if inode.kind != FileKind::System {
         return Err(Error::corrupt(format!(
@@ -744,7 +782,7 @@ fn check_file_block_layout(volume: &dyn BlockSource, geo: &Geometry, resources: 
     let mut raw = [0u8; resource::RESOURCE_HEADER_SIZE];
     map.read_metadata_at(volume, 0, &mut raw).context(".fbb.sf header")?;
     let large = resource::ResourceHeader::parse(&raw, ".fbb.sf")?;
-    map.read_metadata_at(volume, u64::from(large.child_meta_offset), &mut raw)
+    map.read_metadata_at(volume, u64::from(large.nested_header_offset), &mut raw)
         .context(".fbb.sf small block header")?;
     let small = resource::ResourceHeader::parse(&raw, ".fbb.sf (small file blocks)")?;
     if small.resources_per_cluster != geo.sfb_per_cluster {
@@ -758,7 +796,7 @@ fn check_file_block_layout(volume: &dyn BlockSource, geo: &Geometry, resources: 
 }
 
 fn count_active_heartbeats(volume: &dyn BlockSource, geo: &Geometry) -> Result<u32> {
-    let slot_size = geo.md_alignment;
+    let slot_size = geo.metadata_block_size;
     // One read for the whole region: on a device behind a network, a thousand small reads would take seconds.
     let region = HEARTBEAT_SLOTS
         .saturating_mul(slot_size)
@@ -785,7 +823,7 @@ impl Inode {
             link_count: 0,
             length: 0,
             block_size: 0,
-            num_blocks: 0,
+            block_count: 0,
             mtime: 0,
             ctime: 0,
             atime: 0,
@@ -793,8 +831,8 @@ impl Inode {
             gid: 0,
             mode: 0,
             addressing: AddressingMode::FileBlocks,
-            num_tbz_blocks: 0,
-            block_offset_shift: 0,
+            unwritten_blocks: 0,
+            block_shift: 0,
             lock_mode: LockMode::Free,
             lock_owner: Uuid::default(),
             addrs: Vec::new(),

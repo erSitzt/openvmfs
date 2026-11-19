@@ -50,7 +50,7 @@ pub struct LvmDevice {
     /// Size of the device as recorded in the header.
     pub total_bytes: u64,
     /// Metadata alignment of the header area.
-    pub md_alignment: u32,
+    pub header_alignment: u32,
     /// Vendor, model and serial as ESXi recorded them when the volume was created. ESXi compares this with the
     /// device it sees to detect snapshot LUNs.
     pub scsi_vendor: String,
@@ -97,8 +97,8 @@ struct DeviceMetadata {
     info: LvmDevice,
     volume: LvmVolume,
     /// First and last 256 MiB unit of the volume on this device.
-    first_pe: u64,
-    last_pe: u64,
+    first_unit: u64,
+    last_unit: u64,
     /// Extents on this device as (logical offset, offset in the partition, length).
     extents: Vec<(u64, u64, u64)>,
 }
@@ -155,7 +155,7 @@ impl LogicalVolume {
 
         // The devices in volume order, each with its position in `partitions`.
         let mut order: Vec<(usize, &DeviceMetadata)> = metadata.iter().enumerate().collect();
-        order.sort_by_key(|(_, device)| device.first_pe);
+        order.sort_by_key(|(_, device)| device.first_unit);
         let (_, head) = *order.first().ok_or_else(|| Error::invalid_input("no device given"))?;
 
         for (index, device) in &order {
@@ -181,7 +181,7 @@ impl LogicalVolume {
         }
         for pair in order.windows(2) {
             if let [(_, a), (index, b)] = pair {
-                if a.info.device_uuid == b.info.device_uuid || a.first_pe == b.first_pe {
+                if a.info.device_uuid == b.info.device_uuid || a.first_unit == b.first_unit {
                     return Err(Error::invalid_input(format!(
                         "device {index} was given twice, or is a copy of another one (device id {})",
                         b.info.device_uuid
@@ -190,8 +190,8 @@ impl LogicalVolume {
             }
         }
         let expected = usize::try_from(head.volume.device_count).unwrap_or(usize::MAX);
-        if expected != partitions.len() || head.first_pe != 0 {
-            let names = if head.first_pe == 0 && !head.volume.device_names.is_empty() {
+        if expected != partitions.len() || head.first_unit != 0 {
+            let names = if head.first_unit == 0 && !head.volume.device_names.is_empty() {
                 format!(" ({})", head.volume.device_names.join(", "))
             } else {
                 String::new()
@@ -200,7 +200,7 @@ impl LogicalVolume {
                 "the datastore spans {expected} devices{names}, but {} {} given{}; all of them are needed to read it",
                 partitions.len(),
                 if partitions.len() == 1 { "was" } else { "were" },
-                if head.first_pe == 0 {
+                if head.first_unit == 0 {
                     ""
                 } else {
                     ", and the first one is missing"
@@ -208,15 +208,15 @@ impl LogicalVolume {
             )));
         }
         // Each device continues where the one before it ends.
-        let mut next_pe = 0u64;
+        let mut next_unit = 0u64;
         for (index, device) in &order {
-            if device.first_pe != next_pe {
+            if device.first_unit != next_unit {
                 return Err(Error::corrupt(format!(
-                    "device {index} starts at extent {} of the volume, expected {next_pe}",
-                    device.first_pe
+                    "device {index} starts at extent {} of the volume, expected {next_unit}",
+                    device.first_unit
                 )));
             }
-            next_pe = add(device.last_pe, 1, "LVM extent number")?;
+            next_unit = add(device.last_unit, 1, "LVM extent number")?;
         }
 
         let mut runs = Vec::new();
@@ -294,10 +294,10 @@ fn read_device(partition: &dyn BlockSource) -> Result<DeviceMetadata> {
             "LVM major version {major_version} (only LVM {LVM6_MAJOR}, as used by VMFS6, is supported)"
         )));
     }
-    let md_alignment = header.u32(0xCA)?;
-    if md_alignment != 4096 {
+    let header_alignment = header.u32(0xCA)?;
+    if header_alignment != 4096 {
         return Err(Error::unsupported(format!(
-            "LVM metadata alignment {md_alignment} (only 4096 has been verified)"
+            "LVM metadata alignment {header_alignment} (only 4096 has been verified)"
         )));
     }
     let flags = header.u32(0xD2)?;
@@ -306,31 +306,31 @@ fn read_device(partition: &dyn BlockSource) -> Result<DeviceMetadata> {
             "LVM device flags {flags:#x} (1 marks a VMFS-L volume; only plain VMFS6 volumes are supported)"
         )));
     }
-    let num_volumes = header.u32(0x66)?;
-    if num_volumes != 1 {
+    let volume_count = header.u32(0x66)?;
+    if volume_count != 1 {
         return Err(Error::unsupported(format!(
-            "LVM device holds {num_volumes} logical volumes (exactly 1 is expected for VMFS6)"
+            "LVM device holds {volume_count} logical volumes (exactly 1 is expected for VMFS6)"
         )));
     }
-    let num_pes = u64::from(header.u32(0x6A)?);
-    let num_pe_maps = header.u32(0xBE)?;
-    let ext_metadata_offset = header.u64(0xC2)?;
+    let extent_entries = u64::from(header.u32(0x6A)?);
+    let extent_map_count = header.u32(0xBE)?;
+    let next_region_offset = header.u64(0xC2)?;
     // Volumes of 3 TiB and of 17 TiB made by ESXi 7.0.3 have neither; no volume that has them has been seen.
-    if ext_metadata_offset != 0 || num_pe_maps > 1 {
+    if next_region_offset != 0 || extent_map_count > 1 {
         return Err(Error::unsupported(format!(
-            "LVM device uses extended extent metadata (next region at {ext_metadata_offset:#x}, {num_pe_maps} extent \
+            "LVM device uses extended extent metadata (next region at {next_region_offset:#x}, {extent_map_count} extent \
              maps); this layout has not been verified"
         )));
     }
-    if num_pes == 0 || num_pes > MAX_PE_ENTRIES {
+    if extent_entries == 0 || extent_entries > MAX_PE_ENTRIES {
         return Err(Error::corrupt(format!(
-            "LVM device header: {num_pes} physical extent entries"
+            "LVM device header: {extent_entries} physical extent entries"
         )));
     }
 
     // The volume table follows the device metadata, which occupies one alignment unit.
-    let md_alignment_bytes = u64::from(md_alignment);
-    let volume_offset = add(DEVICE_HEADER_OFFSET, md_alignment_bytes, "LVM volume table offset")?;
+    let header_alignment_bytes = u64::from(header_alignment);
+    let volume_offset = add(DEVICE_HEADER_OFFSET, header_alignment_bytes, "LVM volume table offset")?;
     let raw_volume = read_vec(
         partition,
         volume_offset,
@@ -346,12 +346,12 @@ fn read_device(partition: &dyn BlockSource) -> Result<DeviceMetadata> {
         )));
     }
     let volume_id = vol.u32(0x70)?;
-    let first_pe = vol.u64(0x78)?;
-    let last_pe = vol.u64(0x80)?;
+    let first_unit = vol.u64(0x78)?;
+    let last_unit = vol.u64(0x80)?;
     let device_count = vol.u32(0x90)?;
-    if last_pe < first_pe {
+    if last_unit < first_unit {
         return Err(Error::corrupt(format!(
-            "LVM volume descriptor: extents {first_pe} to {last_pe}"
+            "LVM volume descriptor: extents {first_unit} to {last_unit}"
         )));
     }
     if device_count == 0 || usize::try_from(device_count).unwrap_or(usize::MAX) > MAX_DEVICES {
@@ -368,9 +368,9 @@ fn read_device(partition: &dyn BlockSource) -> Result<DeviceMetadata> {
     // physical-extent bitmap and physical-extent table. For LVM6 the volume table has a single entry.
     let volume_area = mul(VOLUME_AREA_SECTORS, 512, "LVM volume area")?;
     let bitmap_offset = add(volume_offset, volume_area, "LVM extent bitmap offset")?;
-    let bitmap_size = md_alignment_bytes.max(1024);
+    let bitmap_size = header_alignment_bytes.max(1024);
     let table_offset = add(bitmap_offset, bitmap_size, "LVM extent table offset")?;
-    let table_len = mul(num_pes, PE_ENTRY_STRIDE, "LVM extent table size")?;
+    let table_len = mul(extent_entries, PE_ENTRY_STRIDE, "LVM extent table size")?;
     let raw_table = read_vec(partition, table_offset, table_len, "LVM extent table")?;
 
     let mut extents = Vec::new();
@@ -395,7 +395,7 @@ fn read_device(partition: &dyn BlockSource) -> Result<DeviceMetadata> {
 
     // The device name table is filled on the first device only.
     let mut device_names = Vec::new();
-    if first_pe == 0 {
+    if first_unit == 0 {
         debug_assert!(DEVICE_NAME_TABLE_SIZE < volume_area);
         let names_offset = bitmap_offset.saturating_sub(DEVICE_NAME_TABLE_SIZE);
         let names_len = mul(u64::from(device_count), DEVICE_NAME_SIZE, "LVM device name table")?;
@@ -407,18 +407,18 @@ fn read_device(partition: &dyn BlockSource) -> Result<DeviceMetadata> {
     }
 
     let scsi = View::new("LVM device SCSI id", DEVICE_HEADER_OFFSET, header.bytes(0x0C, 78)?);
-    let pe_count = add(last_pe.saturating_sub(first_pe), 1, "LVM extent count")?;
+    let unit_count = add(last_unit.saturating_sub(first_unit), 1, "LVM extent count")?;
     Ok(DeviceMetadata {
         info: LvmDevice {
             major_version,
             minor_version: header.u32(0x08)?,
             device_uuid: header.uuid(0x82)?,
             total_bytes: header.u64(0x5E)?,
-            md_alignment,
+            header_alignment,
             scsi_vendor: scsi.text(6, 8)?.trim().to_owned(),
             scsi_model: scsi.text(14, 16)?.trim().to_owned(),
-            volume_start: mul(first_pe, PE_SIZE, "LVM device start")?,
-            volume_len: mul(pe_count, PE_SIZE, "LVM device share")?,
+            volume_start: mul(first_unit, PE_SIZE, "LVM device start")?,
+            volume_len: mul(unit_count, PE_SIZE, "LVM device share")?,
         },
         volume: LvmVolume {
             uuid: vol.uuid(0x54)?,
@@ -429,8 +429,8 @@ fn read_device(partition: &dyn BlockSource) -> Result<DeviceMetadata> {
             generation: vol.u64(0x08)?,
             device_names,
         },
-        first_pe,
-        last_pe,
+        first_unit,
+        last_unit,
         extents,
     })
 }

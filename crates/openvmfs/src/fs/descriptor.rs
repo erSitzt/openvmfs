@@ -33,7 +33,7 @@ pub struct FsDescriptor {
     /// Datastore label.
     pub label: String,
     /// Logical block size of the device when the filesystem was created.
-    pub disk_block_size: u32,
+    pub sector_size: u32,
     /// Size of a (small) file block.
     pub file_block_size: u64,
     /// Creation time, seconds since 1970.
@@ -41,19 +41,19 @@ pub struct FsDescriptor {
     /// UUID of the LVM volume this filesystem belongs to.
     pub lvm_volume_uuid: Uuid,
     /// Offset of the first cluster group inside the file-descriptor resource file.
-    pub fdc_cluster_group_offset: u32,
+    pub descriptor_file_group_offset: u32,
     /// Clusters per cluster group of the file-descriptor resource file.
-    pub fdc_clusters_per_group: u32,
+    pub descriptor_file_clusters_per_group: u32,
     /// Size of a sub-block.
     pub sub_block_size: u32,
     /// Physical block size of the device when the filesystem was created.
-    pub phys_disk_block_size: u32,
+    pub physical_sector_size: u32,
     /// Alignment unit of on-disk metadata.
-    pub md_alignment: u32,
-    /// A large file block is `file_block_size << sfb_to_lfb_shift` bytes.
-    pub sfb_to_lfb_shift: u16,
+    pub metadata_block_size: u32,
+    /// A large file block is `file_block_size << large_block_shift` bytes.
+    pub large_block_shift: u16,
     /// Granularity of "to be zeroed" tracking.
-    pub tbz_granularity: u32,
+    pub zeroing_granularity: u32,
 }
 
 impl FsDescriptor {
@@ -85,17 +85,17 @@ impl FsDescriptor {
             uuid: d.uuid(0x09)?,
             config: d.u32(0x19)?,
             label: d.text(0x1D, 128)?,
-            disk_block_size: d.u32(0x9D)?,
+            sector_size: d.u32(0x9D)?,
             file_block_size: d.u64(0xA1)?,
             creation_time: d.u32(0xA9)?,
             lvm_volume_uuid: d.uuid(0xB1)?,
-            fdc_cluster_group_offset: d.u32(0xD1)?,
-            fdc_clusters_per_group: d.u32(0xD5)?,
+            descriptor_file_group_offset: d.u32(0xD1)?,
+            descriptor_file_clusters_per_group: d.u32(0xD5)?,
             sub_block_size: d.u32(0xD9)?,
-            phys_disk_block_size: d.u32(0x130)?,
-            md_alignment: d.u32(0x134)?,
-            sfb_to_lfb_shift: d.u16(0x138)?,
-            tbz_granularity: d.u32(0x144)?,
+            physical_sector_size: d.u32(0x130)?,
+            metadata_block_size: d.u32(0x134)?,
+            large_block_shift: d.u16(0x138)?,
+            zeroing_granularity: d.u32(0x144)?,
         };
         descriptor.check_supported()?;
         Ok(descriptor)
@@ -136,12 +136,12 @@ impl FsDescriptor {
         };
         expect("file block size", self.file_block_size, 1 << 20)?;
         expect("sub-block size", u64::from(self.sub_block_size), 64 << 10)?;
-        expect("metadata alignment", u64::from(self.md_alignment), 4096)?;
-        expect("small-to-large file block shift", u64::from(self.sfb_to_lfb_shift), 9)?;
-        expect("disk block size", u64::from(self.disk_block_size), 512)?;
-        expect("physical disk block size", u64::from(self.phys_disk_block_size), 512)?;
-        expect("to-be-zeroed granularity", u64::from(self.tbz_granularity), 1 << 20)?;
-        if self.fdc_clusters_per_group == 0 {
+        expect("metadata alignment", u64::from(self.metadata_block_size), 4096)?;
+        expect("small-to-large file block shift", u64::from(self.large_block_shift), 9)?;
+        expect("disk block size", u64::from(self.sector_size), 512)?;
+        expect("physical disk block size", u64::from(self.physical_sector_size), 512)?;
+        expect("to-be-zeroed granularity", u64::from(self.zeroing_granularity), 1 << 20)?;
+        if self.descriptor_file_clusters_per_group == 0 {
             return Err(Error::corrupt(
                 "filesystem descriptor: 0 file-descriptor clusters per group",
             ));
@@ -156,17 +156,17 @@ pub(crate) struct Geometry {
     /// Size of the logical volume.
     pub volume_size: u64,
     /// Alignment unit of metadata; also the size of a lock block.
-    pub md_alignment: u64,
+    pub metadata_block_size: u64,
     /// Size of a file descriptor: a lock block followed by a metadata block.
-    pub fd_size: u64,
+    pub descriptor_size: u64,
     /// Offset of the file metadata inside a file descriptor.
-    pub fd_meta_offset: u64,
+    pub metadata_offset: u64,
     /// Offset of resident data inside a file descriptor.
-    pub fd_data_offset: u64,
+    pub resident_offset: u64,
     /// Bytes available for resident data.
-    pub fd_data_size: u64,
+    pub resident_capacity: u64,
     /// Offset of the block address array inside a file descriptor.
-    pub fd_addrs_offset: u64,
+    pub address_array_offset: u64,
     /// Number of 64-bit entries in the block address array.
     pub fd_addr_count: u64,
     /// Size of a small file block.
@@ -184,80 +184,88 @@ pub(crate) struct Geometry {
     /// Size of a pointer block in bytes.
     pub ptr_block_size: u64,
     /// Volume offset of the first system file descriptor (the root directory's).
-    pub sfd_base: u64,
+    pub system_descriptors_offset: u64,
     /// Read structures whose interpretation has not been verified against ESXi instead of refusing them.
     pub accept_unverified: bool,
 }
 
 impl Geometry {
     pub(crate) fn new(d: &FsDescriptor, volume_size: u64, accept_unverified: bool) -> Result<Self> {
-        let md_alignment = u64::from(d.md_alignment);
+        // Bit 2 of the configuration says that sub-block addresses use the layout this library decodes. It is set
+        // on every VMFS6 volume seen so far.
+        if d.config & 0x4 == 0 && !accept_unverified {
+            return Err(Error::unsupported(format!(
+                "filesystem configuration flags {:#x} lack bit 0x4 (address layout), which every verified volume has",
+                d.config
+            )));
+        }
+        let metadata_block_size = u64::from(d.metadata_block_size);
         let file_block_shift = log2_exact(d.file_block_size)
             .ok_or_else(|| Error::corrupt("filesystem descriptor: file block size is not a power of two"))?;
         let lfb_shift = file_block_shift
-            .checked_add(u32::from(d.sfb_to_lfb_shift))
+            .checked_add(u32::from(d.large_block_shift))
             .filter(|shift| *shift < 48)
             .ok_or_else(|| Error::corrupt("filesystem descriptor: large file block size out of range"))?;
-        let fd_size = mul(md_alignment, 2, "file descriptor size")?;
-        // The metadata block starts with 512 bytes of file metadata. Resident data uses the rest of that block; the
-        // address array is aligned to the end of the descriptor instead.
-        let fd_data_size = md_alignment
+        let descriptor_size = mul(metadata_block_size, 2, "file descriptor size")?;
+        // Layout of a descriptor's second block (docs/format/40-file-descriptor.md): 512 bytes of fields, then room
+        // for the content of a small file. The 320 addresses are the last 2560 bytes and overlap that room.
+        let resident_capacity = metadata_block_size
             .checked_sub(512)
             .ok_or_else(|| Error::corrupt("filesystem descriptor: metadata alignment below 512"))?;
-        let fd_addrs_size = 2560u64;
-        let fd_data_offset = fd_size
-            .checked_sub(fd_data_size)
+        let address_array_size = 2560u64;
+        let resident_offset = descriptor_size
+            .checked_sub(resident_capacity)
             .ok_or_else(|| Error::corrupt("file descriptor layout: data offset"))?;
-        let fd_addrs_offset = fd_size
-            .checked_sub(fd_addrs_size)
+        let address_array_offset = descriptor_size
+            .checked_sub(address_array_size)
             .ok_or_else(|| Error::corrupt("file descriptor layout: address array offset"))?;
 
         // System file descriptors are found without the resource files: the file-descriptor cluster group starts
         // at a fixed position, its cluster headers come first, then the descriptors themselves.
-        let fdc_base = add(
-            mul(md_alignment, 1024, "descriptor area")?,
+        let descriptor_file_start = add(
+            mul(metadata_block_size, 1024, "descriptor area")?,
             0x3F_FFFF,
             "descriptor area",
         )? & !0xF_FFFF;
         let cluster_group = add(
-            fdc_base,
-            u64::from(d.fdc_cluster_group_offset),
+            descriptor_file_start,
+            u64::from(d.descriptor_file_group_offset),
             "descriptor cluster group",
         )?;
         let headers = mul(
-            u64::from(d.fdc_clusters_per_group),
-            fd_size,
+            u64::from(d.descriptor_file_clusters_per_group),
+            descriptor_size,
             "descriptor cluster headers",
         )?;
-        let sfd_base = add(cluster_group, headers, "system file descriptor base")?;
+        let system_descriptors_offset = add(cluster_group, headers, "system file descriptor base")?;
 
         let ptr_block_size = 0x1_0000u64;
         Ok(Geometry {
             volume_size,
-            md_alignment,
-            fd_size,
-            fd_meta_offset: md_alignment,
-            fd_data_offset,
-            fd_data_size,
-            fd_addrs_offset,
-            fd_addr_count: fd_addrs_size / 8,
+            metadata_block_size,
+            descriptor_size,
+            metadata_offset: metadata_block_size,
+            resident_offset,
+            resident_capacity,
+            address_array_offset,
+            fd_addr_count: address_array_size / 8,
             file_block_size: d.file_block_size,
             file_block_shift,
             sub_block_size: u64::from(d.sub_block_size),
             lfb_shift,
-            sfb_per_cluster: 1u64 << d.sfb_to_lfb_shift,
+            sfb_per_cluster: 1u64 << d.large_block_shift,
             ptrs_per_block: ptr_block_size / 8,
             ptr_block_size,
-            sfd_base,
+            system_descriptors_offset,
             accept_unverified,
         })
     }
 
     /// Volume offset of the descriptor of system file number `resource` (0 is the root directory).
-    pub(crate) fn sfd_offset(&self, resource: u64) -> Result<u64> {
+    pub(crate) fn system_descriptor_offset(&self, resource: u64) -> Result<u64> {
         add(
-            self.sfd_base,
-            mul(resource, self.fd_size, "system file descriptor")?,
+            self.system_descriptors_offset,
+            mul(resource, self.descriptor_size, "system file descriptor")?,
             "system file descriptor",
         )
     }
@@ -278,6 +286,7 @@ pub(crate) mod tests {
         put(0x00, &VMFS_MAGIC.to_le_bytes());
         put(0x04, &24u32.to_le_bytes());
         put(0x08, &[82]);
+        put(0x19, &0x4006u32.to_le_bytes());
         put(0x1D, b"datastore1");
         put(0x9D, &512u32.to_le_bytes());
         put(0xA1, &(1u64 << 20).to_le_bytes());
@@ -302,17 +311,17 @@ pub(crate) mod tests {
         assert_eq!(d.version_string(), "6.82");
         assert_eq!(d.label, "datastore1");
         let g = Geometry::new(&d, 2 << 30, false).unwrap();
-        assert_eq!(g.fd_size, 8192);
-        assert_eq!(g.fd_data_offset, 0x1200);
-        assert_eq!(g.fd_data_size, 3584);
-        assert_eq!(g.fd_addrs_offset, 0x1600);
+        assert_eq!(g.descriptor_size, 8192);
+        assert_eq!(g.resident_offset, 0x1200);
+        assert_eq!(g.resident_capacity, 3584);
+        assert_eq!(g.address_array_offset, 0x1600);
         assert_eq!(g.fd_addr_count, 320);
         assert_eq!(g.lfb_shift, 29);
         assert_eq!(g.sfb_per_cluster, 512);
         assert_eq!(g.ptrs_per_block, 8192);
         // 7 MiB, plus the cluster group offset, plus 8 cluster headers of 8 KiB each.
-        assert_eq!(g.sfd_base, 0x72_0000);
-        assert_eq!(g.sfd_offset(2).unwrap(), 0x72_4000);
+        assert_eq!(g.system_descriptors_offset, 0x72_0000);
+        assert_eq!(g.system_descriptor_offset(2).unwrap(), 0x72_4000);
     }
 
     #[test]
