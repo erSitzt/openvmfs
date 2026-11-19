@@ -16,7 +16,7 @@ use std::sync::Arc;
 use openvmfs::{BlockSource, Disk, Error, ErrorKind, OpenOptions, Volume};
 
 /// Version of this interface. Changes when a function or structure changes incompatibly.
-pub const OVMFS_ABI_VERSION: u32 = 3;
+pub const OVMFS_ABI_VERSION: u32 = 4;
 
 /// Status codes. Zero is success.
 pub const OVMFS_OK: i32 = 0;
@@ -567,6 +567,87 @@ pub unsafe extern "C" fn ovmfs_disk_data_ranges(
         };
     }
     count
+}
+
+/// `ovmfs_mapped_range::backing`: the range reads as zeros.
+pub const OVMFS_BACKING_ZERO: u32 = 0;
+/// `ovmfs_mapped_range::backing`: the bytes are on a device.
+pub const OVMFS_BACKING_DEVICE: u32 = 1;
+
+/// A range of a virtual disk and where its bytes are stored.
+#[allow(non_camel_case_types)]
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ovmfs_mapped_range {
+    /// Offset on the virtual disk.
+    pub offset: u64,
+    /// Length of the range.
+    pub length: u64,
+    /// Offset from the start of the device; 0 for a zero range.
+    pub device_offset: u64,
+    /// Position of the device in the list the volume was opened with.
+    pub device: u32,
+    /// `OVMFS_BACKING_ZERO` or `OVMFS_BACKING_DEVICE`.
+    pub backing: u32,
+}
+
+/// Describes where the bytes of the disk are stored, from `offset` on and for at most `length` bytes: writes up to
+/// `capacity` contiguous entries to `out_ranges` and their number to `out_count`.
+///
+/// # Safety
+/// `disk` must be a live handle. `out_ranges` must be valid for writing `capacity` elements; it may be null when
+/// `capacity` is 0. `out_count` must be valid for writing one `size_t`. `out_error` must be null or valid for
+/// writing one pointer.
+#[no_mangle]
+pub unsafe extern "C" fn ovmfs_disk_map(
+    disk: *const ovmfs_disk,
+    offset: u64,
+    length: u64,
+    out_ranges: *mut ovmfs_mapped_range,
+    capacity: usize,
+    out_count: *mut usize,
+    out_error: *mut *mut ovmfs_error,
+) -> i32 {
+    // SAFETY: forwarded caller guarantees; see the function's safety section.
+    unsafe {
+        guarded(out_error, || {
+            let disk = disk.as_ref().ok_or_else(|| invalid("disk is null"))?;
+            if out_count.is_null() {
+                return Err(invalid("out_count is null"));
+            }
+            *out_count = 0;
+            if capacity > 0 && out_ranges.is_null() {
+                return Err(invalid("out_ranges is null"));
+            }
+            let end = offset
+                .checked_add(length)
+                .ok_or_else(|| invalid("offset + length overflows"))?;
+            let ranges = disk.0.map(offset..end, capacity)?;
+            if !ranges.is_empty() {
+                let out = std::slice::from_raw_parts_mut(out_ranges, ranges.len().min(capacity));
+                for (slot, range) in out.iter_mut().zip(&ranges) {
+                    *slot = match range.backing {
+                        openvmfs::Backing::Zero => ovmfs_mapped_range {
+                            offset: range.offset,
+                            length: range.len,
+                            device_offset: 0,
+                            device: 0,
+                            backing: OVMFS_BACKING_ZERO,
+                        },
+                        openvmfs::Backing::Device { device, offset } => ovmfs_mapped_range {
+                            offset: range.offset,
+                            length: range.len,
+                            device_offset: offset,
+                            device: u32::try_from(device).map_err(|_| invalid("device index does not fit"))?,
+                            backing: OVMFS_BACKING_DEVICE,
+                        },
+                    };
+                }
+                *out_count = out.len();
+            }
+            Ok(())
+        })
+    }
 }
 
 /// Status code of an error; `OVMFS_OK` for null.

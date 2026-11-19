@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 pub use descriptor::{Access, Descriptor, ExtentLine, ExtentType, NO_PARENT_CID};
 
-use crate::bytes::mul;
+use crate::bytes::{add, mul};
 use crate::error::{Error, Result, ResultExt};
 use crate::fs::{Extent, ExtentKind, File, FileKind, Volume};
 use crate::io::BlockSource;
@@ -39,8 +39,65 @@ pub struct ChainLink {
 enum Layer {
     /// The base disk: a flat file.
     Flat(File),
-    /// A snapshot delta.
-    SeSparse(SeSparse),
+    /// A snapshot delta, and the file it is stored in.
+    SeSparse(SeSparse, File),
+}
+
+/// What backs a range of a virtual disk.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Backing {
+    /// The range reads as zeros: unallocated, never written, or discarded.
+    Zero,
+    /// The bytes are stored on a device, at this offset from its start. `device` is the device's position in the
+    /// list the volume was opened with; 0 for a datastore on one device.
+    Device { device: usize, offset: u64 },
+}
+
+/// A range of a virtual disk and what backs it. See [`Disk::map`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MappedRange {
+    /// Offset on the virtual disk.
+    pub offset: u64,
+    pub len: u64,
+    pub backing: Backing,
+}
+
+/// Collects mapped ranges in order, merging neighbours, up to a limit.
+struct MapCollector {
+    ranges: Vec<MappedRange>,
+    limit: usize,
+}
+
+impl MapCollector {
+    /// Adds a range that starts where the last one ended. Returns `false` when the limit is reached and the range
+    /// was not added.
+    fn push(&mut self, offset: u64, len: u64, backing: Backing) -> bool {
+        if len == 0 {
+            return true;
+        }
+        if let Some(last) = self.ranges.last_mut() {
+            let continues = match (last.backing, backing) {
+                (Backing::Zero, Backing::Zero) => true,
+                (
+                    Backing::Device { device: a, offset: at },
+                    Backing::Device {
+                        device: b,
+                        offset: next,
+                    },
+                ) => a == b && at.checked_add(last.len) == Some(next),
+                _ => false,
+            };
+            if continues {
+                last.len = last.len.saturating_add(len);
+                return true;
+            }
+        }
+        if self.ranges.len() >= self.limit {
+            return false;
+        }
+        self.ranges.push(MappedRange { offset, len, backing });
+        true
+    }
 }
 
 #[derive(Debug)]
@@ -53,6 +110,8 @@ struct DiskInner {
     chain: Vec<ChainLink>,
     /// One per link, in the same order.
     layers: Vec<Layer>,
+    /// The volume the disk lives on, for translating volume offsets into device offsets.
+    volume: Volume,
     data_ranges: Box<[Range<u64>]>,
 }
 
@@ -165,9 +224,9 @@ impl Disk {
                             "{link_path:?} names the parent {hint:?} but has no parent content id"
                         )));
                     }
-                    let delta = SeSparse::open(Arc::new(file), link_capacity, volume.accepts_unverified())
+                    let delta = SeSparse::open(Arc::new(file.clone()), link_capacity, volume.accepts_unverified())
                         .context(format!("delta file {extent_path:?}"))?;
-                    layers.push(Layer::SeSparse(delta));
+                    layers.push(Layer::SeSparse(delta, file));
                     next = Some(parent_path(volume, &link_path, &hint)?);
                 }
                 other => return Err(unsupported_extent(other)),
@@ -189,6 +248,7 @@ impl Disk {
                 descriptor_path,
                 chain,
                 layers,
+                volume: volume.clone(),
                 data_ranges,
             }),
         })
@@ -231,10 +291,150 @@ impl Disk {
         }
     }
 
+    /// Where the bytes of `range` are stored: for every part of it, either an offset on a device or "zeros".
+    ///
+    /// With this map a caller can read the disk's data from the devices itself, in whatever way suits it
+    /// (asynchronously, batched, over a network), and leave only the metadata to this library. Reading a
+    /// [`Backing::Device`] range from its device gives exactly the bytes [`Disk::read_exact_at`] returns for it.
+    ///
+    /// The result starts at `range.start`, is contiguous, and has at most `limit` entries; neighbouring ranges
+    /// are merged. If it ends before `range.end`, call again from where it ended. A base disk needs an entry per
+    /// run of file blocks; a disk with snapshots can need one per 4 KiB where a delta is fragmented.
+    ///
+    /// Not available on a volume opened with `replay_journal`: there, what is read differs from what the devices
+    /// hold.
+    pub fn map(&self, range: Range<u64>, limit: usize) -> Result<Vec<MappedRange>> {
+        if range.start > range.end || range.end > self.inner.capacity {
+            return Err(Error::invalid_input(format!(
+                "range {:#x}..{:#x} is not inside the disk ({:#x} bytes)",
+                range.start, range.end, self.inner.capacity
+            )));
+        }
+        if self.inner.volume.journal_replayed() {
+            return Err(Error::invalid_input(
+                "a device map is not available on a volume that is read with its journal replayed",
+            ));
+        }
+        let mut out = MapCollector {
+            ranges: Vec::new(),
+            limit,
+        };
+        self.map_layer(0, range.start, range.end, &mut out)?;
+        Ok(out.ranges)
+    }
+
+    /// Maps `start..end` of the disk as layer `index` and the layers below it see it. Returns `false` when the
+    /// collector is full.
+    fn map_layer(&self, index: usize, start: u64, end: u64, out: &mut MapCollector) -> Result<bool> {
+        match self.inner.layers.get(index) {
+            Some(Layer::Flat(file)) => self.map_file(file, start, end, start, out),
+            Some(Layer::SeSparse(delta, file)) => {
+                let runs = delta.runs();
+                let mut offset = start;
+                let mut next = runs.partition_point(|run| run.offset.saturating_add(run.len) <= offset);
+                while offset < end {
+                    let run = runs.get(next);
+                    // Up to the next run of the delta, the layers below decide.
+                    let below_until = match run {
+                        Some(run) if run.offset <= offset => offset,
+                        Some(run) => run.offset.min(end),
+                        None => end,
+                    };
+                    if below_until > offset {
+                        if !self.map_layer(index.saturating_add(1), offset, below_until, out)? {
+                            return Ok(false);
+                        }
+                        offset = below_until;
+                        continue;
+                    }
+                    let Some(run) = run else { break };
+                    let within = offset.saturating_sub(run.offset);
+                    let until = run.offset.saturating_add(run.len).min(end);
+                    let more = match run.kind {
+                        RunKind::Zero => out.push(offset, until.saturating_sub(offset), Backing::Zero),
+                        RunKind::Allocated { file_offset } => {
+                            let from = add(file_offset, within, "delta file offset")?;
+                            let to = add(from, until.saturating_sub(offset), "delta file offset")?;
+                            self.map_file(file, from, to, offset, out)?
+                        }
+                    };
+                    if !more {
+                        return Ok(false);
+                    }
+                    offset = until;
+                    next = next.saturating_add(1);
+                }
+                Ok(true)
+            }
+            None => Err(Error::corrupt("snapshot chain ends without a base disk")),
+        }
+    }
+
+    /// Maps `start..end` of a file, which holds the disk's bytes from `disk_offset` on.
+    fn map_file(
+        &self,
+        file: &File,
+        start: u64,
+        end: u64,
+        mut disk_offset: u64,
+        out: &mut MapCollector,
+    ) -> Result<bool> {
+        let extents = file.extents();
+        let mut offset = start;
+        let mut index = extents.partition_point(|extent| extent.offset.saturating_add(extent.len) <= offset);
+        while offset < end {
+            let extent = extents
+                .get(index)
+                .filter(|extent| extent.offset <= offset)
+                .ok_or_else(|| {
+                    Error::corrupt(format!(
+                        "the block map of an extent file ends before offset {offset:#x}"
+                    ))
+                })?;
+            let within = offset.saturating_sub(extent.offset);
+            let mut left = extent.offset.saturating_add(extent.len).min(end).saturating_sub(offset);
+            match extent.kind {
+                ExtentKind::Data { volume_offset } => {
+                    let mut volume_offset = add(volume_offset, within, "volume offset")?;
+                    // A run of blocks can cross from one device of a spanned datastore to the next.
+                    while left > 0 {
+                        let (device, device_offset, available) = self.inner.volume.device_run(volume_offset)?;
+                        let take = left.min(available);
+                        if take == 0 {
+                            return Err(Error::corrupt(format!(
+                                "volume offset {volume_offset:#x} maps to nothing"
+                            )));
+                        }
+                        let backing = Backing::Device {
+                            device,
+                            offset: device_offset,
+                        };
+                        if !out.push(disk_offset, take, backing) {
+                            return Ok(false);
+                        }
+                        left = left.saturating_sub(take);
+                        offset = add(offset, take, "file offset")?;
+                        disk_offset = add(disk_offset, take, "disk offset")?;
+                        volume_offset = add(volume_offset, take, "volume offset")?;
+                    }
+                }
+                ExtentKind::ToBeZeroed { .. } | ExtentKind::Hole => {
+                    if !out.push(disk_offset, left, Backing::Zero) {
+                        return Ok(false);
+                    }
+                    offset = add(offset, left, "file offset")?;
+                    disk_offset = add(disk_offset, left, "disk offset")?;
+                }
+            }
+            index = index.saturating_add(1);
+        }
+        Ok(true)
+    }
+
     fn read_layer(&self, index: usize, offset: u64, buf: &mut [u8]) -> Result<()> {
         match self.inner.layers.get(index) {
             Some(Layer::Flat(file)) => file.read_exact_at(offset, buf),
-            Some(Layer::SeSparse(delta)) => {
+            Some(Layer::SeSparse(delta, _)) => {
                 let below = index.saturating_add(1);
                 delta.read_exact_at(offset, buf, &|offset, buf| self.read_layer(below, offset, buf))
             }
@@ -376,7 +576,7 @@ fn chain_data_ranges(layers: &[Layer]) -> Box<[Range<u64>]> {
     for layer in layers.iter().rev() {
         match layer {
             Layer::Flat(file) => ranges = flat_data_ranges(file.extents()),
-            Layer::SeSparse(delta) => {
+            Layer::SeSparse(delta, _) => {
                 let mut allocated = Vec::new();
                 let mut zero = Vec::new();
                 for run in delta.runs() {

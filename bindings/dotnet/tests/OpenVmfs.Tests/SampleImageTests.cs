@@ -191,6 +191,61 @@ public sealed class SampleImageTests
     }
 
     [Fact]
+    public void MapNamesDeviceAndOffsetOfEveryRange()
+    {
+        // The same datastore on two devices as above; the caller reads the data itself.
+        var first = FindCacheFile("ours", "fixture-span-v1-dev1.fixture.img");
+        var second = FindCacheFile("ours", "fixture-span-v1-dev2.fixture.img");
+        Assert.SkipWhen(first is null || second is null, "The spanned fixture has not been unpacked.");
+        string[] paths = [first!, second!];
+        using var volume = VmfsVolume.Open(paths);
+        using var disk = volume.OpenDisk("d/lazy.vmdk");
+        using var device0 = File.OpenHandle(paths[0]);
+        using var device1 = File.OpenHandle(paths[1]);
+        Microsoft.Win32.SafeHandles.SafeFileHandle[] devices = [device0, device1];
+
+        var ours = new byte[MiB];
+        var theirs = new byte[MiB];
+        var devicesUsed = new HashSet<int>();
+        long dataBytes = 0;
+        long position = 0;
+        while (position < disk.Capacity)
+        {
+            // A small page size, to go through the paging.
+            var page = disk.Map(position, disk.Capacity - position, maxRanges: 2);
+            Assert.InRange(page.Count, 1, 2);
+            foreach (var range in page)
+            {
+                Assert.Equal(position, range.Offset);
+                position = range.End;
+                if (range.IsZero)
+                {
+                    disk.Read(range.Offset, ours.AsSpan(0, 512));
+                    Assert.All(ours.AsSpan(0, 512).ToArray(), b => Assert.Equal(0, b));
+                    continue;
+                }
+
+                devicesUsed.Add(range.Device);
+                dataBytes += range.Length;
+                for (long done = 0; done < range.Length; done += MiB)
+                {
+                    var take = (int)Math.Min(MiB, range.Length - done);
+                    disk.Read(range.Offset + done, ours.AsSpan(0, take));
+                    RandomAccess.Read(devices[range.Device], theirs.AsSpan(0, take), range.DeviceOffset + done);
+                    Assert.True(ours.AsSpan(0, take).SequenceEqual(theirs.AsSpan(0, take)), $"disk offset {range.Offset + done}");
+                }
+            }
+        }
+
+        Assert.Equal(disk.Capacity, position);
+        Assert.Equal(disk.DataExtents.Sum(extent => extent.Length), dataBytes);
+        Assert.Equal([0, 1], devicesUsed.Order());
+
+        var outside = Assert.Throws<VmfsException>(() => disk.Map(disk.Capacity, 1));
+        Assert.Equal(VmfsErrorKind.InvalidInput, outside.Kind);
+    }
+
+    [Fact]
     public void VolumeFacts()
     {
         using var volume = OpenSample();

@@ -8,7 +8,7 @@ internal static unsafe partial class Native
     private const string Library = "openvmfs_c";
 
     /// <summary>The interface version this binding was written for.</summary>
-    internal const uint AbiVersion = 3;
+    internal const uint AbiVersion = 4;
 
     internal const uint OpenAcceptUnverified = 1;
     internal const uint OpenDirect = 2;
@@ -77,6 +77,19 @@ internal static unsafe partial class Native
 
     [LibraryImport(Library)]
     internal static partial nuint ovmfs_disk_data_ranges(DiskHandle disk, Range* ranges, nuint capacity);
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct MappedRange
+    {
+        public ulong Offset;
+        public ulong Length;
+        public ulong DeviceOffset;
+        public uint Device;
+        public uint Backing;
+    }
+
+    [LibraryImport(Library)]
+    internal static partial int ovmfs_disk_map(DiskHandle disk, ulong offset, ulong length, MappedRange* ranges, nuint capacity, out nuint count, out nint error);
 
     [LibraryImport(Library)]
     internal static partial nint ovmfs_error_message(nint error);

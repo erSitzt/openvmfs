@@ -24,7 +24,7 @@
 extern "C" {
 #endif
 
-#define OVMFS_ABI_VERSION 3
+#define OVMFS_ABI_VERSION 4
 
 #define OVMFS_OK 0
 #define OVMFS_ERR_IO 1            /* the device could not be read */
@@ -55,6 +55,18 @@ typedef struct ovmfs_range {
     uint64_t offset;
     uint64_t length;
 } ovmfs_range;
+
+#define OVMFS_BACKING_ZERO 0   /* the range reads as zeros */
+#define OVMFS_BACKING_DEVICE 1 /* the bytes are on a device */
+
+/* A range of a virtual disk and where its bytes are stored. */
+typedef struct ovmfs_mapped_range {
+    uint64_t offset;        /* on the virtual disk */
+    uint64_t length;
+    uint64_t device_offset; /* from the start of the device; 0 for OVMFS_BACKING_ZERO */
+    uint32_t device;        /* position of the device in the list the volume was opened with; 0 for one device */
+    uint32_t backing;       /* OVMFS_BACKING_* */
+} ovmfs_mapped_range;
 
 typedef struct ovmfs_volume_info {
     uint64_t capacity;          /* size of the logical volume in bytes */
@@ -123,6 +135,17 @@ int32_t ovmfs_disk_read(const ovmfs_disk *disk, uint64_t offset, uint8_t *buffer
 /* The ranges of the disk that hold data, sorted by offset. Everything outside them reads as zeros. */
 size_t ovmfs_disk_data_range_count(const ovmfs_disk *disk);
 size_t ovmfs_disk_data_ranges(const ovmfs_disk *disk, ovmfs_range *out_ranges, size_t capacity);
+
+/*
+ * Where the bytes of the disk are stored, for callers that want to read the data from the devices themselves and
+ * leave only the metadata to this library. Describes the disk from offset on, for at most length bytes: writes up to
+ * capacity entries to out_ranges and their number to out_count. The entries are contiguous and start at offset. If
+ * they end before offset + length, call again from where they ended. Reading an OVMFS_BACKING_DEVICE range from its
+ * device gives exactly what ovmfs_disk_read returns for it.
+ * Fails with OVMFS_ERR_INVALID_INPUT on a volume opened with OVMFS_OPEN_REPLAY_JOURNAL.
+ */
+int32_t ovmfs_disk_map(const ovmfs_disk *disk, uint64_t offset, uint64_t length, ovmfs_mapped_range *out_ranges,
+                       size_t capacity, size_t *out_count, ovmfs_error **out_error);
 
 int32_t ovmfs_error_status(const ovmfs_error *error);
 const char *ovmfs_error_message(const ovmfs_error *error); /* valid until the error is freed */

@@ -66,6 +66,7 @@ ovmfs_disk_close(disk);
 | `ovmfs_disk_capacity(disk)` | Size of the disk in bytes |
 | `ovmfs_disk_read(disk, offset, buffer, length, &error)` | Fills the buffer or fails; never a short read |
 | `ovmfs_disk_data_range_count(disk)`, `ovmfs_disk_data_ranges(disk, out, capacity)` | The ranges that hold data; everything else reads as zeros |
+| `ovmfs_disk_map(disk, offset, length, out, capacity, &count, &error)` | Where the bytes of the disk are stored: per range, a device and an offset on it, or "zeros". For callers that read the data from the devices themselves. Fills at most `capacity` contiguous entries from `offset` on; call again from where they end |
 | `ovmfs_error_status`, `ovmfs_error_message`, `ovmfs_error_free` | Reading and freeing an error |
 
 Flags for the open functions, combined with `|`:

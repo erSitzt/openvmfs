@@ -561,6 +561,17 @@ impl Volume {
         ))
     }
 
+    /// Like [`Volume::device_location`], and also how many bytes from there on lie on that device without a break.
+    pub fn device_run(&self, volume_offset: u64) -> Result<(usize, u64, u64)> {
+        let (device, offset_in_partition, available) = self.inner.lvm.translate(volume_offset)?;
+        let partition_offset = self.inner.partition_offsets.get(device).copied().unwrap_or(0);
+        Ok((
+            device,
+            crate::bytes::add(partition_offset, offset_in_partition, "device offset")?,
+            available,
+        ))
+    }
+
     /// Number of devices the datastore is stored on.
     pub fn device_count(&self) -> usize {
         self.inner.partition_offsets.len()

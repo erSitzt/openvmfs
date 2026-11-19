@@ -21,6 +21,11 @@ under `runtimes/<rid>/native/`, where the .NET runtime finds it on its own:
 tools/pack-nuget.sh                      # target/nuget/OpenVmfs.<version>.nupkg
 ```
 
+The script builds the native libraries apart from everyday builds, with the paths of the build machine mapped
+away, and fails if anything in the package still names the machine or its user. The package also carries `LICENSE`,
+`NOTICE` and `THIRD-PARTY-NOTICES.txt` (the native libraries link nothing but OpenVmfs and the Rust standard
+library).
+
 Reference it from a local package source until the package is published:
 
 ```xml
@@ -72,14 +77,47 @@ sealed class TunnelDevice(Tunnel tunnel) : IVmfsDevice
 using var volume = VmfsVolume.Open(new TunnelDevice(tunnel));
 ```
 
+## Reading the data yourself: `Map`
+
+`Read` blocks a thread until the device has answered. If your devices are slow or remote and you have an
+asynchronous, batched way to read them, let OpenVmfs do only the metadata: `Map` says where every part of the disk
+is stored, and you fetch the bytes.
+
+```csharp
+long position = 0;
+while (position < disk.Capacity)
+{
+    foreach (var range in disk.Map(position, disk.Capacity - position))
+    {
+        if (!range.IsZero)
+        {
+            // range.Length bytes of the disk at range.Offset are on device range.Device at range.DeviceOffset.
+            await lun[range.Device].ReadAsync(range.DeviceOffset, buffer, cancellationToken);
+        }
+        position = range.End;
+    }
+}
+```
+
+- The ranges are contiguous, start where you asked, and are merged where they touch. A call returns at most
+  `maxRanges` of them (default 4096); continue from `End` of the last one.
+- Reading a range from its device gives exactly the bytes `Read` returns for it. Zero ranges are not on any device:
+  unallocated, never written (the device may hold stale bytes there), or discarded by the guest.
+- `Device` is the position in the list the volume was opened with; 0 for a datastore on one device.
+- A base disk maps in runs of file blocks. A disk with snapshots can need a range per 4 KiB where a delta is
+  fragmented, so map the part you are about to read, not a huge disk in one go.
+- The map covers snapshot chains: every range points into the delta or base file that holds the newest data.
+- Not available with `ReplayJournal`; `Map` throws `InvalidInput` there.
+
 ## The types
 
 | Type | Members |
 |---|---|
 | `VmfsVolume` | `Open(path, options)`, `Open(paths, options)`, `Open(device, options)`, `OpenDisk(descriptorPath)`, `Label`, `Uuid`, `Version`, `Capacity`, `FileBlockSize`, `PartitionOffset`, `ActiveHeartbeats` |
 | `VmfsOpenOptions` | `Partition`, `DirectIo`, `ReplayJournal`, `AcceptInUse`, `AcceptUnverified` |
-| `VmdkDisk` | `Capacity`, `DataExtents`, `Read(offset, Span<byte>)`, `ReadAsync(offset, Memory<byte>, cancellationToken)` |
+| `VmdkDisk` | `Capacity`, `DataExtents`, `Read(offset, Span<byte>)`, `ReadAsync(offset, Memory<byte>, cancellationToken)`, `Map(offset, length, maxRanges)` |
 | `DataExtent` | `Offset`, `Length`, `End` |
+| `MappedRange` | `Offset`, `Length`, `End`, `IsZero`, `Device`, `DeviceOffset` |
 | `IVmfsDevice` | `Length`, `Read(offset, Span<byte>)`: a device read through your code |
 | `VmfsException` | `Kind` (`VmfsErrorKind`), `Message` |
 
@@ -91,6 +129,8 @@ using var volume = VmfsVolume.Open(new TunnelDevice(tunnel));
 - **`ReadAsync`** checks the token and then runs the read on the thread pool. It completes only when the native
   call has returned, so a pooled buffer can be handed back as soon as the task is done. A read that is under way is
   not interrupted by cancellation.
+- **`VmfsVolume.Version`** is the on-disk format version as text, for example `6.82`. It does not change with the
+  version of OpenVmfs.
 - **A disk outlives its volume.** You can dispose the `VmfsVolume` and keep reading the disks you opened.
 - **Errors.** Every failure is a `VmfsException` with a `Kind`:
 

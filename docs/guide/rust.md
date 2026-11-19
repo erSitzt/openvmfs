@@ -85,6 +85,10 @@ disk.read_exact_at(0, &mut buffer[..512])?;
 - `chain()` lists the snapshot chain, newest link first. For a disk with snapshots, pass the descriptor of the
   level you want; the levels below it are read through.
 - `extents()` is the block map of the base disk's flat file, with volume offsets.
+- `map(range, limit)` says where the bytes of a part of the disk are stored: a list of [`MappedRange`]s, each
+  either zeros or a device and an offset on it, through all snapshot deltas. With it you can read the data from the
+  devices yourself and leave only the metadata to the library. At most `limit` ranges per call; continue from
+  where they end.
 
 ## Errors
 
@@ -132,3 +136,4 @@ descriptor of any file.
 [`File`]: ../../crates/openvmfs/src/fs/mod.rs
 [`Disk`]: ../../crates/openvmfs/src/vmdk/mod.rs
 [`BlockSource`]: ../../crates/openvmfs/src/io.rs
+[`MappedRange`]: ../../crates/openvmfs/src/vmdk/mod.rs

@@ -1,0 +1,22 @@
+Third-party software in the OpenVmfs package
+===========================================
+
+OpenVmfs.dll (managed) contains only OpenVmfs code and depends on nothing but the .NET runtime.
+
+The native libraries (runtimes/linux-x64/native/libopenvmfs_c.so, runtimes/win-x64/native/openvmfs_c.dll) are built
+from the OpenVmfs crates `openvmfs` and `openvmfs-capi`. These crates have no third-party dependencies: `cargo tree
+-p openvmfs-capi -e normal` lists only the two of them. What is linked in besides OpenVmfs code:
+
+1. The Rust standard library and the crates it is built from (for example core, alloc, std, compiler_builtins,
+   hashbrown, libc, memchr, rustc-demangle, addr2line, gimli, object, miniz_oxide, adler2, cfg-if,
+   std_detect, unwind, panic_unwind).
+   Licence: MIT OR Apache-2.0 (a few of the crates additionally offer Zlib or 0BSD).
+   Copyright: The Rust Project Contributors and the authors of the respective crates.
+   Source and licence texts: https://github.com/rust-lang/rust (LICENSE-MIT, LICENSE-APACHE, COPYRIGHT).
+
+2. In openvmfs_c.dll only (target x86_64-pc-windows-gnu): startup code and runtime support from the MinGW-w64
+   runtime (Zope Public License 2.1 and public domain, https://www.mingw-w64.org) and from libgcc (GPL-3.0-or-later
+   with the GCC Runtime Library Exception 3.1, which permits distribution of the compiled result under the terms of
+   your choice).
+
+No code from other VMFS or VMDK implementations is contained; see NOTICE.

@@ -9,6 +9,21 @@ public readonly record struct DataExtent(long Offset, long Length)
     public long End => Offset + Length;
 }
 
+/// <summary>A range of a virtual disk and where its bytes are stored. See <see cref="VmdkDisk.Map"/>.</summary>
+/// <param name="Offset">Offset on the virtual disk.</param>
+/// <param name="Length">Length of the range in bytes.</param>
+/// <param name="IsZero">True if the range reads as zeros: unallocated, never written, or discarded.</param>
+/// <param name="Device">
+/// Position of the device in the list the volume was opened with; 0 for a datastore on one device and for zero
+/// ranges.
+/// </param>
+/// <param name="DeviceOffset">Offset of the bytes from the start of that device; 0 for zero ranges.</param>
+public readonly record struct MappedRange(long Offset, long Length, bool IsZero, int Device, long DeviceOffset)
+{
+    /// <summary>First offset after the range.</summary>
+    public long End => Offset + Length;
+}
+
 /// <summary>
 /// A virtual disk: the bytes a guest sees. Reads can run in parallel; the disk stays usable after its volume has
 /// been disposed.
@@ -65,6 +80,51 @@ public sealed class VmdkDisk : IDisposable, IAsyncDisposable
             var status = Native.ovmfs_disk_read(_handle, (ulong)offset, buffer, (nuint)destination.Length, out var error);
             Native.ThrowIfFailed(status, error, _bridge);
         }
+    }
+
+    /// <summary>
+    /// Says where the bytes of the disk are stored: for every part of the requested range, an offset on a device or
+    /// "zeros". With it a caller can read the data from the devices itself (asynchronously, batched, over a
+    /// network) and leave only the metadata to this library. Reading a range from its device gives exactly what
+    /// <see cref="Read"/> returns for it.
+    /// </summary>
+    /// <param name="offset">Where on the disk to start.</param>
+    /// <param name="length">How many bytes to describe at most.</param>
+    /// <param name="maxRanges">Upper limit for the number of ranges returned.</param>
+    /// <returns>
+    /// Contiguous ranges starting at <paramref name="offset"/>, neighbours merged. If they end before
+    /// <paramref name="offset"/> + <paramref name="length"/>, call again from <see cref="MappedRange.End"/> of the
+    /// last one. A disk with snapshots can need one range per 4 KiB where a delta is fragmented.
+    /// </returns>
+    /// <exception cref="VmfsException">
+    /// The range is not inside the disk, or the volume was opened with <see cref="VmfsOpenOptions.ReplayJournal"/>.
+    /// </exception>
+    public unsafe IReadOnlyList<MappedRange> Map(long offset, long length, int maxRanges = 4096)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(offset);
+        ArgumentOutOfRangeException.ThrowIfNegative(length);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxRanges);
+        var ranges = new Native.MappedRange[maxRanges];
+        nuint count;
+        fixed (Native.MappedRange* first = ranges)
+        {
+            var status = Native.ovmfs_disk_map(_handle, (ulong)offset, (ulong)length, first, (nuint)maxRanges, out count, out var error);
+            Native.ThrowIfFailed(status, error, _bridge);
+        }
+
+        var result = new MappedRange[checked((int)count)];
+        for (var i = 0; i < result.Length; i++)
+        {
+            var range = ranges[i];
+            result[i] = new MappedRange(
+                checked((long)range.Offset),
+                checked((long)range.Length),
+                range.Backing == 0,
+                checked((int)range.Device),
+                checked((long)range.DeviceOffset));
+        }
+
+        return result;
     }
 
     /// <summary>

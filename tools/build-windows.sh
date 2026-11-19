@@ -14,9 +14,11 @@ docker build -q -t openvmfs-winbuild --build-arg "BASE=$base" --build-arg "TOOLC
 run() {
   docker run --rm --user "$(id -u):$(id -g)" -v "$root:/work" -w /work \
     -e CARGO_HOME=/work/target/windows-cargo-home -e HOME=/tmp \
+    -e CARGO_TARGET_DIR -e RUSTFLAGS="${OPENVMFS_WINDOWS_RUSTFLAGS:-}" \
     openvmfs-winbuild "$@"
 }
-out="$root/target/x86_64-pc-windows-gnu/release"
+# CARGO_TARGET_DIR, if set, must be relative to the repository (it is used inside the container too).
+out="$root/${CARGO_TARGET_DIR:-target}/x86_64-pc-windows-gnu/release"
 run cargo build --release --target x86_64-pc-windows-gnu -p openvmfs-cli -p openvmfs-capi
 ls -l "$out/openvmfs.exe" "$out/openvmfs_c.dll"
 

@@ -141,6 +141,32 @@ int main(int argc, char **argv) {
     CHECK(ovmfs_disk_read(disk, 0, buffer, length, &error) == OVMFS_OK);
     for (size_t i = 0; i < length; i++) CHECK(buffer[i] == 0);
 
+    /* The map: zeros, then the megabyte of data with its place on the device, then zeros again. */
+    ovmfs_mapped_range mapped[4];
+    size_t mapped_count = 99;
+    CHECK(ovmfs_disk_map(disk, 0, ovmfs_disk_capacity(disk), mapped, 4, &mapped_count, &error) == OVMFS_OK);
+    CHECK(mapped_count == 3);
+    CHECK(mapped[0].offset == 0 && mapped[0].length == 42ull << 30 && mapped[0].backing == OVMFS_BACKING_ZERO);
+    CHECK(mapped[1].offset == 42ull << 30 && mapped[1].length == 1u << 20);
+    CHECK(mapped[1].backing == OVMFS_BACKING_DEVICE && mapped[1].device == 0);
+    CHECK(mapped[2].offset + mapped[2].length == ovmfs_disk_capacity(disk));
+    /* The bytes at that place on the device are the bytes of the disk. */
+    FILE *raw = fopen(argv[1], "rb");
+    CHECK(raw != NULL);
+    uint8_t direct[512];
+    CHECK(fseek(raw, (long)mapped[1].device_offset, SEEK_SET) == 0);
+    CHECK(fread(direct, 1, sizeof direct, raw) == sizeof direct);
+    fclose(raw);
+    CHECK(ovmfs_disk_read(disk, mapped[1].offset, buffer, sizeof direct, &error) == OVMFS_OK);
+    CHECK(memcmp(direct, buffer, sizeof direct) == 0);
+    /* With room for one entry it stops after the first; a range outside the disk fails. */
+    CHECK(ovmfs_disk_map(disk, 0, ovmfs_disk_capacity(disk), mapped, 1, &mapped_count, &error) == OVMFS_OK);
+    CHECK(mapped_count == 1 && mapped[0].length == 42ull << 30);
+    CHECK(ovmfs_disk_map(disk, 0, 0, NULL, 0, &mapped_count, &error) == OVMFS_OK && mapped_count == 0);
+    CHECK(ovmfs_disk_map(disk, 1, ovmfs_disk_capacity(disk), mapped, 4, &mapped_count, &error) == OVMFS_ERR_INVALID_INPUT);
+    ovmfs_error_free(error);
+    error = NULL;
+
     /* A read of nothing succeeds without a buffer; a read beyond the end fails. */
     CHECK(ovmfs_disk_read(disk, 0, NULL, 0, &error) == OVMFS_OK);
     CHECK(ovmfs_disk_read(disk, ovmfs_disk_capacity(disk), buffer, 1, &error) == OVMFS_ERR_INVALID_INPUT);

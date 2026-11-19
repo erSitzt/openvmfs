@@ -52,7 +52,7 @@ pub use fs::{
     DirEntry, Extent, ExtentKind, File, FileKind, FileStat, JournalStatus, LockMode, OpenOptions, Volume, VolumeInfo,
 };
 pub use io::{BlockSource, FileSource, MemorySource, SubSource};
-pub use vmdk::{ChainLink, Disk};
+pub use vmdk::{Backing, ChainLink, Disk, MappedRange};
 
 /// A VMFS UUID: creation time, a random part and the MAC address of the host that created the object.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Default)]

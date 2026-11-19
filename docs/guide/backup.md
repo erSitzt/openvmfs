@@ -64,6 +64,10 @@ OpenVmfs refuses it.
 - `read(offset, buffer)`: positioned reads that fill the buffer or fail. Any offset, any length, from any number of
   threads. Blocks of a thick disk that were never written read as zeros, although the LUN holds stale data there.
 
+- `map(offset, length)`: for callers that would rather read the LUN themselves, where every part of the disk is
+  stored (a device and an offset on it, or zeros), through all snapshot deltas. OpenVmfs then reads only metadata.
+  Useful when the LUN is behind a slow or asynchronous transport.
+
 A full backup reads the data ranges. For an **incremental** backup you need to know what changed, and that is not
 on the datastore in a form OpenVmfs reads: ask vSphere (`QueryChangedDiskAreas`, which needs changed-block
 tracking and the VM snapshot from step 1) and read those areas with OpenVmfs. Intersect them with `data_ranges` if
