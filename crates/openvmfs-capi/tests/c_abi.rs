@@ -148,13 +148,17 @@ fn the_c_example_exports_a_disk() {
         "export failed: {}",
         String::from_utf8_lossy(&run.stderr)
     );
-    let exported = std::fs::File::open(&output).unwrap();
+    // Portable reads: this file is compiled on Windows too, although the test only runs on Linux.
+    use std::io::{Read, Seek, SeekFrom};
+    let mut exported = std::fs::File::open(&output).unwrap();
     assert_eq!(exported.metadata().unwrap().len(), 69 << 30);
     let mut at_data = [0u8; 4096];
-    std::os::unix::fs::FileExt::read_exact_at(&exported, &mut at_data, 42 << 30).unwrap();
+    exported.seek(SeekFrom::Start(42 << 30)).unwrap();
+    exported.read_exact(&mut at_data).unwrap();
     assert!(at_data.iter().any(|&byte| byte != 0));
     let mut before = [0xFFu8; 4096];
-    std::os::unix::fs::FileExt::read_exact_at(&exported, &mut before, (42 << 30) - 4096).unwrap();
+    exported.seek(SeekFrom::Start((42 << 30) - 4096)).unwrap();
+    exported.read_exact(&mut before).unwrap();
     assert!(before.iter().all(|&byte| byte == 0));
     drop(exported);
     std::fs::remove_file(&output).unwrap();
