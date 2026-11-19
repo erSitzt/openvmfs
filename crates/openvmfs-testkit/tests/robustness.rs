@@ -17,7 +17,7 @@
 use std::sync::Arc;
 
 use openvmfs::{BlockSource, ErrorKind, FileSource, OpenOptions, Volume};
-use openvmfs_testkit::{own_image, MutatedSource, Rng, TracingSource};
+use openvmfs_testkit::{own_image, own_partial_image, MutatedSource, PartialSource, Rng, TracingSource};
 
 const MIB: u64 = 1 << 20;
 
@@ -141,6 +141,38 @@ fn damaged_devices_of_a_spanned_datastore_never_panic() {
         volume.read_dir("")?;
         volume.read_dir("d")?;
         read_disks(volume, &["d/lazy.vmdk", "d/thin.vmdk"])
+    });
+    assert!(refused > 0);
+}
+
+/// A partial fixture as a whole device: what was not captured reads as zeros, so that a damaged address that points
+/// anywhere inside the device can be followed.
+#[derive(Debug)]
+struct ZeroFilled(PartialSource);
+
+impl BlockSource for ZeroFilled {
+    fn len(&self) -> u64 {
+        self.0.len()
+    }
+
+    fn read_exact_at(&self, offset: u64, buf: &mut [u8]) -> openvmfs::Result<()> {
+        let inside = offset
+            .checked_add(buf.len() as u64)
+            .is_some_and(|end| end <= self.0.len());
+        if inside && !self.0.covers(offset, buf.len() as u64) {
+            buf.fill(0);
+            return Ok(());
+        }
+        self.0.read_exact_at(offset, buf)
+    }
+}
+
+#[test]
+fn damaged_double_indirect_files_never_panic() {
+    let device: Arc<dyn BlockSource> = Arc::new(ZeroFilled(own_partial_image("fixture-double-v1")));
+    let refused = damage(vec![device], 6000, 0xD0B1E, |volume| {
+        volume.read_dir("dbl")?;
+        read_disks(volume, &["dbl/huge.vmdk", "dbl/edge.vmdk"])
     });
     assert!(refused > 0);
 }
