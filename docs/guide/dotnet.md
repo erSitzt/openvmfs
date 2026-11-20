@@ -14,26 +14,25 @@ dotnet test --solution bindings/dotnet/OpenVmfs.slnx   # needs the sample images
 The project copies `libopenvmfs_c.so` (and `openvmfs_c.dll`, when it was built with `tools/build-windows.sh`) next
 to the managed assembly.
 
-For your own application, build the NuGet package. It carries the native library for Linux x64 and Windows x64
-under `runtimes/<rid>/native/`, where the .NET runtime finds it on its own:
+## Install
+
+```bash
+dotnet add package OpenVmfs
+```
+
+The package carries the native library for Linux x64 and Windows x64 under `runtimes/<rid>/native/`, where the
+.NET runtime finds it on its own, and `LICENSE`, `NOTICE` and `THIRD-PARTY-NOTICES.txt` (the native libraries link
+nothing but OpenVmfs and the Rust standard library).
+
+To build the package yourself:
 
 ```bash
 tools/pack-nuget.sh                      # target/nuget/OpenVmfs.<version>.nupkg
 ```
 
 The script builds the native libraries apart from everyday builds, with the paths of the build machine mapped
-away, and fails if anything in the package still names the machine or its user. The package also carries `LICENSE`,
-`NOTICE` and `THIRD-PARTY-NOTICES.txt` (the native libraries link nothing but OpenVmfs and the Rust standard
-library).
-
-Reference it from a local package source until the package is published:
-
-```xml
-<!-- nuget.config -->
-<packageSources>
-  <add key="openvmfs-local" value="/path/to/openvmfs/target/nuget" />
-</packageSources>
-```
+away, and fails if anything in the package still names the machine or its user. A tag `v<version>` makes
+`.github/workflows/release.yml` run the tests, build the package this way and publish it to nuget.org.
 
 ## Reading a disk
 

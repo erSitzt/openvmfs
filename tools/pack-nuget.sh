@@ -33,7 +33,8 @@ unzip -l "$package" | grep -E "runtimes/(linux-x64|win-x64)/native/" || { echo "
 check="$(mktemp -d)"
 trap 'rm -rf "$check"' EXIT
 unzip -q "$package" -d "$check"
-if grep -r -a -l -F -e "$HOME" -e "$root" -e "$(id -un)" "$check"; then
+# (The user name is looked for as a path component: on a build service it is an everyday word.)
+if grep -r -a -l -F -e "$HOME" -e "$root" -e "/$(id -un)/" -e "\\$(id -un)\\" "$check"; then
   echo "the files above contain a path or user name of this machine" >&2
   exit 1
 fi

@@ -5,6 +5,7 @@
     <PackageId>OpenVmfs</PackageId>
     <Description>Read-only access to VMware VMFS6 volumes and the virtual disks (VMDK) stored on them, without ESXi.</Description>
     <PackageTags>vmfs;vmdk;vmware;esxi;backup</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
     <!-- Where cargo put the native libraries; tools/pack-nuget.sh points this at its own build. -->
     <NativeRoot Condition="'$(NativeRoot)' == ''">$(RepoRoot)target/</NativeRoot>
   </PropertyGroup>
@@ -22,6 +23,7 @@
           Condition="Exists('$(NativeRoot)x86_64-pc-windows-gnu/release/openvmfs_c.dll')"
           Link="openvmfs_c.dll" CopyToOutputDirectory="PreserveNewest"
           Pack="true" PackagePath="runtimes/win-x64/native" />
+    <None Include="README.md" Pack="true" PackagePath="" />
     <None Include="$(RepoRoot)LICENSE" Pack="true" PackagePath="" />
     <None Include="$(RepoRoot)NOTICE" Pack="true" PackagePath="" />
     <None Include="$(MSBuildThisFileDirectory)../../THIRD-PARTY-NOTICES.txt" Pack="true" PackagePath="" />

@@ -1,0 +1,53 @@
+name: Release
+
+# A tag v<version> runs the tests and then publishes the .NET package to nuget.org. The login uses nuget.org's
+# Trusted Publishing (a short-lived key for this repository and workflow), so no API key is stored here.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  nuget:
+    needs: ci
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: The tag names the version in Cargo.toml and Directory.Build.props
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          cargo_version="$(sed -n 's/^version *= *"\(.*\)"/\1/p' Cargo.toml | head -1)"
+          dotnet_version="$(sed -n 's:.*<VersionPrefix>\(.*\)</VersionPrefix>.*:\1:p' bindings/dotnet/Directory.Build.props)"
+          echo "tag $tag, Cargo.toml $cargo_version, Directory.Build.props $dotnet_version"
+          [ -n "$tag" ] && [ "$tag" = "$cargo_version" ] && [ "$tag" = "$dotnet_version" ]
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: bindings/dotnet/global.json
+      # Builds the native library for Linux here and for Windows in a container, and checks the package for paths
+      # of the build machine.
+      - name: Package
+        run: tools/pack-nuget.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nuget
+          path: target/nuget/*.nupkg
+          if-no-files-found: error
+      - name: Log in to nuget.org
+        id: login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ secrets.NUGET_USER }}
+      - name: Publish
+        run: >
+          dotnet nuget push target/nuget/*.nupkg
+          --api-key "${{ steps.login.outputs.NUGET_API_KEY }}"
+          --source https://api.nuget.org/v3/index.json
+          --skip-duplicate
