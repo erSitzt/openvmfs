@@ -231,3 +231,22 @@ Two thin disks larger than 2.5 TiB (4 TiB and 2600 GiB) on a 256 GiB datastore, 
 and at the end. Partial image. The disks are too large to hash on ESXi, so the reference is the written pattern,
 sector by sector, and ESXi's block map (`truth/*.t0.txt`); `fixtures/recipes/check_chunks.py` does the same check on
 any image. The same disks made by ESXi 8.0 U3 read identical too (not kept as a fixture).
+
+## fixture-many-esxi8-v1
+
+A 48 GiB datastore on which ESXi 8.0 U3 created 100,697 files of 8 KiB (`recipes/make_many.py`), to see what ESXi
+does when its pools run out. What it did (`truth/esxi.txt`):
+
+- It grew the descriptor pool from its initial size to 102,848 descriptors and the sub-block pool to 66,816
+  sub-blocks (261 clusters), a few clusters at a time and far slower than the files arrived.
+- A file created while no sub-block was free got a whole 1 MiB file block instead (`zla 1`). About a third of the
+  files ended up that way; the datastore used 38 GiB for 0.8 GiB of content.
+- Sub-block clusters 256 to 260 are in use. That is where the older tools read sub-block addresses in two
+  different ways.
+
+Every file holds a hash of its own number, so no list of hashes is needed. On the full image all 100,697 files read
+as written. Partial image (39 MiB of the device, 0.1 MiB packed): the two directories and seven files the tests read,
+among them `d098/f0255` and `d098/f0256`, the first sub-blocks of clusters 255 and 256.
+
+Two earlier runs on 16 GiB datastores filled them before reaching cluster 256 and are not kept: 56,848 files on ESXi
+7.0.3 and 41,775 on ESXi 8.0 U3, all read as written.

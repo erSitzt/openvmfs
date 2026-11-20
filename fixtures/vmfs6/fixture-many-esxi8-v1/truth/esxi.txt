@@ -1,0 +1,14 @@
+0
+101
+697
+-rw-r--r--    1 root     root          8192 Nov 20 17:41 f0695
+-rw-r--r--    1 root     root          8192 Nov 20 17:41 f0696
+Files (max/free): 102848/2039
+Ptr Blocks (max/free): 0/0
+Sub Blocks (max/free): 66816/0
+Secondary Ptr Blocks (max/free): 256/255
+VMFS-6         48896 39261      9635  80% /vmfs/volumes/fm8
+len 8192, nb 1 tbz 0, cow 0, newSinceEpoch 1, zla 1, bs 1048576
+len 8192, nb 1 tbz 0, cow 0, newSinceEpoch 1, zla 2, bs 65536
+len 8192, nb 1 tbz 0, cow 0, newSinceEpoch 1, zla 2, bs 65536
+unmount 0

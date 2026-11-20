@@ -39,8 +39,11 @@ Bit 0 is the least significant bit; ranges are inclusive.
 
 Bit 5 is read as copy-on-write by one implementation family and as the VMFS5 form of "to be zeroed" by the
 other; it was never seen set on VMFS6. All other bits have no known meaning. OpenVmfs refuses an address in which one of them is set, any address
-with bit 5, sub-block addresses above cluster 255, addresses in `.pb2.sf` other than the first, and pointer block
+with bit 5, addresses in `.pb2.sf` other than the first, and pointer block
 addresses of type 3: for those the implementations disagree or no sample exists.
+
+Sub-block clusters above 255 are **[V]**: on a datastore with 100,697 small files ESXi 8.0 U3 used clusters 0 to 260,
+and the cluster number continues in bits 6–41 (cluster 256 is address `0x4002`). See `fixture-many-esxi8-v1`.
 
 The two implementation families read SFB and SB addresses differently once numbers get large
 (see [open questions](90-open-questions.md)). The layout above is the wider one; both agree on the values seen so

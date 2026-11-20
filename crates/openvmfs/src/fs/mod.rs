@@ -265,10 +265,7 @@ struct Resolver<'a> {
 impl AddressSpace for Resolver<'_> {
     fn read_pointer_block(&self, raw: u64) -> std::result::Result<Vec<u64>, MapError> {
         let (which, cluster, resource) = match Addr::decode(raw)? {
-            Addr::SubBlock { cluster, resource } => {
-                self.check_sub_block_cluster(raw, cluster)?;
-                (SystemFile::SubBlocks, cluster, resource)
-            }
+            Addr::SubBlock { cluster, resource } => (SystemFile::SubBlocks, cluster, resource),
             // VMFS6 keeps `.pbc.sf` empty; an address into it has never been seen.
             Addr::PointerBlock { cluster, resource } => {
                 if !self.geo.accept_unverified {
@@ -317,7 +314,6 @@ impl AddressSpace for Resolver<'_> {
     }
 
     fn sub_block_offset(&self, cluster: u64, resource: u64) -> std::result::Result<u64, MapError> {
-        self.check_sub_block_cluster(cluster << 6 | resource << 56 | 2, cluster)?;
         let file = self.resources.get(SystemFile::SubBlocks)?;
         if file.header.resource_size != self.geo.sub_block_size {
             return Err(Error::corrupt(format!(
@@ -327,21 +323,6 @@ impl AddressSpace for Resolver<'_> {
             .into());
         }
         Ok(file.locate(cluster, resource, self.geo)?)
-    }
-}
-
-impl Resolver<'_> {
-    /// Sub-block addresses are read differently by the other implementations once the cluster number needs more
-    /// than eight bits. Up to there they agree, and that is as far as our fixtures go.
-    fn check_sub_block_cluster(&self, raw: u64, cluster: u64) -> std::result::Result<(), MapError> {
-        if cluster >= 256 && !self.geo.accept_unverified {
-            return Err(Error::unsupported(format!(
-                "sub-block address {raw:#018x} names cluster {cluster}; the layout of sub-block addresses above \
-                 cluster 255 has not been verified"
-            ))
-            .into());
-        }
-        Ok(())
     }
 }
 
