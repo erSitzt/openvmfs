@@ -1,0 +1,70 @@
+Third-party software in the openvmfs command line tool
+=======================================================
+
+The programs `openvmfs` (Linux x64, statically linked) and `openvmfs.exe` (Windows x64) are built from the OpenVmfs
+crates `openvmfs` and `openvmfs-cli`. Besides OpenVmfs code they contain:
+
+1. The Rust standard library and the crates it is built from (for example core, alloc, std, compiler_builtins,
+   hashbrown, libc, memchr, rustc-demangle, addr2line, gimli, object, miniz_oxide, adler2, cfg-if,
+   std_detect, unwind, panic_unwind).
+   Licence: MIT OR Apache-2.0 (a few of the crates additionally offer Zlib or 0BSD).
+   Copyright: The Rust Project Contributors and the authors of the respective crates.
+   Source and licence texts: https://github.com/rust-lang/rust (LICENSE-MIT, LICENSE-APACHE, COPYRIGHT).
+
+2. Crates used for SHA-256 (`cargo tree -p openvmfs-cli -e normal`), used here under the Apache License 2.0, whose
+   text is in the file LICENSE:
+     sha2           Copyright (c) 2006-2009 Graydon Hoare, 2009-2013 Mozilla Foundation, 2016 Artyom Pavlov
+     digest         Copyright (c) 2017 Artyom Pavlov
+     block-buffer   Copyright (c) 2018-2019 The RustCrypto Project Developers
+     crypto-common  Copyright (c) 2021 RustCrypto Developers
+     cpufeatures    Copyright (c) 2020-2025 The RustCrypto Project Developers
+     typenum        Copyright (c) 2014 Paho Lurie-Gregg
+     cfg-if         Copyright (c) 2014 Alex Crichton
+   Sources: https://crates.io/crates/<name>.
+
+3. generic-array (https://crates.io/crates/generic-array), under the MIT licence:
+
+     The MIT License (MIT)
+     
+     Copyright (c) 2015 Bartłomiej Kamiński
+     
+     Permission is hereby granted, free of charge, to any person obtaining a copy
+     of this software and associated documentation files (the "Software"), to deal
+     in the Software without restriction, including without limitation the rights
+     to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+     copies of the Software, and to permit persons to whom the Software is
+     furnished to do so, subject to the following conditions:
+     
+     The above copyright notice and this permission notice shall be included in all
+     copies or substantial portions of the Software.
+     
+     THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+     IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+     FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+     AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+     LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+     SOFTWARE.
+4. In `openvmfs` (Linux) only: the musl C library (https://musl.libc.org), statically linked, under the MIT licence:
+
+     Copyright © 2005-2020 Rich Felker, et al.
+
+     Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+     documentation files (the "Software"), to deal in the Software without restriction, including without limitation
+     the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and
+     to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+     The above copyright notice and this permission notice shall be included in all copies or substantial portions
+     of the Software.
+
+     THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+     THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+     AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+     CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+     DEALINGS IN THE SOFTWARE.
+
+5. In `openvmfs.exe` (Windows) only: startup code and runtime support from the MinGW-w64 runtime (Zope Public
+   License 2.1 and public domain, https://www.mingw-w64.org) and from libgcc (GPL-3.0-or-later with the GCC Runtime
+   Library Exception 3.1, which permits distribution of the compiled result under the terms of your choice).
+
+No code from other VMFS or VMDK implementations is contained; see NOTICE.

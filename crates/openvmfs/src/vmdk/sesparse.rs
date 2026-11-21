@@ -24,6 +24,8 @@ const TABLE_SECTORS: u64 = 64;
 const ENTRIES_PER_TABLE: u64 = TABLE_SECTORS * SECTOR / 8;
 /// Upper half of a grain directory entry that points to a table.
 const DIRECTORY_ENTRY_TAG: u64 = 0x1000_0000;
+/// How many grain tables are fetched in one read at most (4 MiB).
+const TABLES_PER_READ: u64 = 128;
 
 /// What a delta says about a range of the disk.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -145,9 +147,16 @@ impl SeSparse {
         let raw_directory = read_vec(&*source, directory_offset, directory_bytes, "SESparse grain directory")?;
         let table_bytes = TABLE_SECTORS * SECTOR;
 
+        let directory: Vec<u64> = raw_directory
+            .chunks_exact(8)
+            .map(|raw_entry| u64::from_le_bytes(raw_entry.try_into().unwrap_or([0; 8])))
+            .collect();
+        drop(raw_directory);
+        // Tables that follow each other in the file are read in one piece: `(index of the first, bytes)`.
+        let mut batch: (u64, Vec<u8>) = (0, Vec::new());
+
         let mut runs: Vec<Run> = Vec::new();
-        for (table_number, raw_entry) in raw_directory.chunks_exact(8).enumerate() {
-            let entry = u64::from_le_bytes(raw_entry.try_into().unwrap_or([0; 8]));
+        for (table_number, &entry) in directory.iter().enumerate() {
             if entry == 0 {
                 continue;
             }
@@ -169,7 +178,39 @@ impl SeSparse {
                     "SESparse grain directory entry {table_number} points to table {table_index}, outside the table area"
                 )));
             }
-            let raw_table = read_vec(&*source, table_offset, table_bytes, "SESparse grain table")?;
+            let in_batch = table_index
+                .checked_sub(batch.0)
+                .filter(|&position| position < batch.1.len() as u64 / table_bytes);
+            let position = match in_batch {
+                Some(position) => position,
+                None => {
+                    // ESXi hands out tables in the order it needs them, so the next directory entries usually
+                    // name the next tables. Each read costs a round trip to the device; fetch them together.
+                    let mut tables = 1u64;
+                    for &next in directory.iter().skip(table_number.saturating_add(1)) {
+                        let wanted = table_index.saturating_add(tables);
+                        let fits = wanted.saturating_add(1).saturating_mul(table_bytes) <= tables_size;
+                        if tables == TABLES_PER_READ || next != (DIRECTORY_ENTRY_TAG << 32 | wanted) || !fits {
+                            break;
+                        }
+                        tables = tables.saturating_add(1);
+                    }
+                    let bytes = mul(tables, table_bytes, "grain table length")?;
+                    batch = (
+                        table_index,
+                        read_vec(&*source, table_offset, bytes, "SESparse grain table")?,
+                    );
+                    0
+                }
+            };
+            let fit = |value: u64| {
+                usize::try_from(value).map_err(|_| Error::corrupt("SESparse grain table position does not fit"))
+            };
+            let start = fit(mul(position, table_bytes, "grain table position")?)?;
+            let raw_table = batch
+                .1
+                .get(start..start.saturating_add(fit(table_bytes)?))
+                .ok_or_else(|| Error::corrupt("SESparse grain table lies outside what was read"))?;
             let first_grain = mul(table_number as u64, ENTRIES_PER_TABLE, "grain number")?;
             for (slot, raw_grain) in raw_table.chunks_exact(8).enumerate() {
                 let grain_entry = u64::from_le_bytes(raw_grain.try_into().unwrap_or([0; 8]));
@@ -544,5 +585,55 @@ pub(crate) mod tests {
         // 16 MiB disk: 4096 grains, exactly one table. Grain 4096 would be in a second table.
         let image = build(16 * MIB + 4096, &[(4097, allocated(0))], 1);
         assert_eq!(open(image, 16 * MIB + 4096).unwrap_err().kind(), ErrorKind::Corrupt);
+    }
+
+    /// Records the length of every read.
+    #[derive(Debug)]
+    struct Recording(MemorySource, std::sync::Mutex<Vec<usize>>);
+
+    impl BlockSource for Recording {
+        fn len(&self) -> u64 {
+            self.0.len()
+        }
+
+        fn read_exact_at(&self, offset: u64, buf: &mut [u8]) -> Result<()> {
+            self.1.lock().unwrap().push(buf.len());
+            self.0.read_exact_at(offset, buf)
+        }
+    }
+
+    #[test]
+    fn neighbouring_tables_are_read_together() {
+        // Tables are numbered in the order they are first used: disk tables 2, 0, 1, 3 get the indices 0, 1, 2, 3.
+        // The directory is walked by disk table, so it asks for the indices 1, 2, 0, 3: one read for 1 and 2,
+        // one for 0, one for 3.
+        let grains = [
+            (2 * 4096, allocated(0)),
+            (5, allocated(1)),
+            (4096 + 7, allocated(2)),
+            (3 * 4096 + 9, allocated(3)),
+        ];
+        let source = Arc::new(Recording(
+            MemorySource::new(build(64 * MIB, &grains, 4)),
+            Default::default(),
+        ));
+        let delta = SeSparse::open(source.clone(), 64 * MIB, false).unwrap();
+        let table = (TABLE_SECTORS * SECTOR) as usize;
+        let table_reads: Vec<usize> = source
+            .1
+            .lock()
+            .unwrap()
+            .iter()
+            .copied()
+            .filter(|&len| len >= table)
+            .collect();
+        assert_eq!(table_reads, [2 * table, table, table]);
+        for (grain, index) in [(2 * 4096u64, 0u8), (5, 1), (4096 + 7, 2), (3 * 4096 + 9, 3)] {
+            let mut buf = [0u8; 4096];
+            delta
+                .read_exact_at(grain * 4096, &mut buf, &|_, _| panic!("parent"))
+                .unwrap();
+            assert!(buf.iter().all(|&b| b == index + 1), "grain {grain}");
+        }
     }
 }

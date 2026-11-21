@@ -8,10 +8,13 @@
     clippy::cast_possible_truncation
 )]
 
+mod rawdev;
+
 use std::io::{Seek, SeekFrom, Write};
 use std::process::ExitCode;
+use std::sync::Arc;
 
-use openvmfs::{BlockSource, Error, ErrorKind, Extent, ExtentKind, FileKind, OpenOptions, Volume};
+use openvmfs::{BlockSource, Error, ErrorKind, Extent, ExtentKind, FileKind, FileSource, OpenOptions, Volume};
 use sha2::{Digest, Sha256};
 
 const USAGE: &str = "\
@@ -35,6 +38,7 @@ Usage:
                                                  write the disk to a raw image (sparse), or to - for stdout
 
 <device> is an image file or a block device: a whole disk with a partition table, or the VMFS partition.
+On Windows a raw disk is \\\\.\\PhysicalDriveN (from an elevated prompt); it is opened read-only and may be offline.
 For a datastore that spans several devices, give all of them separated by commas, in any order.
 Set OPENVMFS_DIRECT=1 to read without the operating system's page cache (O_DIRECT), as a backup of a LUN should.
 <descriptor> is the path of the small .vmdk text file inside the datastore, for example vm1/vm1.vmdk.
@@ -163,7 +167,21 @@ fn open(device: &str) -> Result<Volume, CliError> {
     };
     // A datastore on several devices is given as a comma-separated list.
     let paths: Vec<&str> = device.split(',').collect();
-    Ok(Volume::open_paths(&paths, &options)?)
+    if !paths.iter().any(|path| rawdev::is_raw_device(path)) {
+        return Ok(Volume::open_paths(&paths, &options)?);
+    }
+    // Raw disks on Windows need their size asked from the driver and are always read unbuffered.
+    let mut devices: Vec<Arc<dyn BlockSource>> = Vec::with_capacity(paths.len());
+    for path in paths {
+        devices.push(if rawdev::is_raw_device(path) {
+            rawdev::open(path)?
+        } else if options.direct {
+            Arc::new(FileSource::open_direct(path)?)
+        } else {
+            Arc::new(FileSource::open(path)?)
+        });
+    }
+    Ok(Volume::open_devices(devices, &options)?)
 }
 
 fn info(device: &str) -> CliResult {

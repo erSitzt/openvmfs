@@ -16,5 +16,17 @@ path = "src/main.rs"
 openvmfs = { path = "../openvmfs" }
 sha2 = "0.10"
 
-[lints]
-workspace = true
+# The workspace lints, except that unsafe code is denied instead of forbidden: src/rawdev.rs allows it for the one
+# call that asks Windows for the size of a raw disk.
+[lints.rust]
+unsafe_code = "deny"
+missing_debug_implementations = "warn"
+
+[lints.clippy]
+arithmetic_side_effects = "warn"
+cast_possible_truncation = "warn"
+indexing_slicing = "warn"
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"
+undocumented_unsafe_blocks = "deny"

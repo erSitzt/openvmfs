@@ -8,6 +8,19 @@ openvmfs <command> <device> [arguments]
 For a datastore that spans several devices, give all of them separated by commas, in any order. Paths inside the
 datastore are written with `/`, relative to its root; a leading `/` is optional.
 
+Ready-made programs for Linux x64 (statically linked) and Windows x64 are attached to each release on GitHub
+(`openvmfs-<version>-linux-x64.tar.gz`, `openvmfs-<version>-windows-x64.zip`, with `SHA256SUMS`);
+`tools/pack-cli.sh` builds the same archives.
+
+On Windows a raw disk is `\\.\PhysicalDriveN` (the number is the one `Get-Disk` shows), from an elevated prompt:
+
+```
+openvmfs.exe info \\.\PhysicalDrive3
+```
+
+The disk is opened read-only and read unbuffered in whole sectors. It may be offline and read-only, which is how
+Windows should keep a snapshot LUN; `openvmfs` does not bring it online and changes nothing.
+
 Examples below use `fixtures/vmfs6/fixture-zero-v1.img.zst`, unpacked to `fz.img`.
 
 ## Commands for the volume
