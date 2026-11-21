@@ -3,7 +3,7 @@
 //! Format description: `docs/format/20-fs-descriptor.md`.
 
 use crate::bytes::{add, log2_exact, mul, View};
-use crate::error::{Error, Result};
+use crate::error::{Error, Result, UnsupportedReason};
 use crate::io::{read_vec, BlockSource};
 use crate::Uuid;
 
@@ -69,7 +69,8 @@ impl FsDescriptor {
 
         let magic = d.u32(0x00)?;
         if magic == VMFSL_MAGIC {
-            return Err(Error::unsupported(
+            return Err(Error::unsupported_because(
+                UnsupportedReason::VmfsL,
                 "VMFS-L volume (ESXi system volume); only VMFS6 datastores are supported",
             ));
         }
@@ -114,10 +115,13 @@ impl FsDescriptor {
     /// Refuses every layout that has not been verified against a volume written by ESXi.
     fn check_supported(&self) -> Result<()> {
         if self.major_version != VMFS6_MAJOR {
-            return Err(Error::unsupported(format!(
-                "filesystem major version {} (only {VMFS6_MAJOR}, VMFS6, is supported; VMFS5 is 14)",
-                self.major_version
-            )));
+            return Err(Error::unsupported_because(
+                UnsupportedReason::OtherVmfsVersion,
+                format!(
+                    "filesystem major version {} (only {VMFS6_MAJOR}, VMFS6, is supported; VMFS5 is 14)",
+                    self.major_version
+                ),
+            ));
         }
         if !VERIFIED_MINOR_VERSIONS.contains(&self.minor_version) {
             return Err(Error::unsupported(format!(

@@ -118,7 +118,7 @@ while (position < disk.Capacity)
 | `DataExtent` | `Offset`, `Length`, `End` |
 | `MappedRange` | `Offset`, `Length`, `End`, `IsZero`, `Device`, `DeviceOffset` |
 | `IVmfsDevice` | `Length`, `Read(offset, Span<byte>)`: a device read through your code |
-| `VmfsException` | `Kind` (`VmfsErrorKind`), `Message` |
+| `VmfsException` | `Kind` (`VmfsErrorKind`), `UnsupportedReason` (`VmfsUnsupportedReason`, why something was refused), `Message` |
 
 ## Behaviour worth knowing
 

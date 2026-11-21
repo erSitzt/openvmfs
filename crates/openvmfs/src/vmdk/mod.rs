@@ -14,7 +14,7 @@ use std::sync::Arc;
 pub use descriptor::{Access, Descriptor, ExtentLine, ExtentType, NO_PARENT_CID};
 
 use crate::bytes::{add, mul};
-use crate::error::{Error, Result, ResultExt};
+use crate::error::{Error, Result, ResultExt, UnsupportedReason};
 use crate::fs::{Extent, ExtentKind, File, FileKind, Volume};
 use crate::io::BlockSource;
 
@@ -482,9 +482,10 @@ fn read_descriptor(volume: &Volume, path: &str) -> Result<Descriptor> {
         return Err(Error::unsupported(format!("descriptor version {}", descriptor.version)));
     }
     if let Some(marker) = descriptor.io_filter_marker() {
-        return Err(Error::unsupported(format!(
-            "the disk uses an I/O filter or encryption ({marker}); its content cannot be read directly"
-        )));
+        return Err(Error::unsupported_because(
+            UnsupportedReason::Encrypted,
+            format!("the disk uses an I/O filter or encryption ({marker}); its content cannot be read directly"),
+        ));
     }
     Ok(descriptor)
 }
@@ -518,13 +519,15 @@ fn single_extent(descriptor: &Descriptor) -> Result<&ExtentLine> {
 
 fn unsupported_extent(kind: &ExtentType) -> Error {
     match kind {
-        ExtentType::VmfsSparse => Error::unsupported(
+        ExtentType::VmfsSparse => Error::unsupported_because(
+            UnsupportedReason::LegacySparse,
             "the extent is a snapshot delta in the older COWD format (VMFSSPARSE), which VMFS6 does not create and \
              which is not supported",
         ),
-        ExtentType::VmfsRdm | ExtentType::VmfsRaw => {
-            Error::unsupported("the disk is a raw device mapping; its data lives on another device")
-        }
+        ExtentType::VmfsRdm | ExtentType::VmfsRaw => Error::unsupported_because(
+            UnsupportedReason::RawDeviceMapping,
+            "the disk is a raw device mapping; its data lives on another device",
+        ),
         other => Error::unsupported(format!("extent type {other:?}")),
     }
 }
@@ -532,14 +535,16 @@ fn unsupported_extent(kind: &ExtentType) -> Error {
 /// Resolves an extent file name relative to the directory of its descriptor.
 fn sibling_path(descriptor_path: &str, file_name: &str) -> Result<String> {
     if file_name.starts_with('/') {
-        return Err(Error::unsupported(format!(
-            "the extent file {file_name:?} is given as an absolute path, which may point to another datastore"
-        )));
+        return Err(Error::unsupported_because(
+            UnsupportedReason::ChainLeavesDatastore,
+            format!("the extent file {file_name:?} is given as an absolute path, which may point to another datastore"),
+        ));
     }
     if file_name.split('/').any(|part| part == "..") {
-        return Err(Error::unsupported(format!(
-            "the extent file name {file_name:?} leaves the disk's directory"
-        )));
+        return Err(Error::unsupported_because(
+            UnsupportedReason::ChainLeavesDatastore,
+            format!("the extent file name {file_name:?} leaves the disk's directory"),
+        ));
     }
     let directory = descriptor_path.rsplit_once('/').map_or("", |(directory, _)| directory);
     Ok(format!("{directory}/{file_name}"))
@@ -553,18 +558,25 @@ fn parent_path(volume: &Volume, descriptor_path: &str, hint: &str) -> Result<Str
         let info = volume.info();
         if datastore == info.uuid.to_string() || datastore == info.label {
             if path.split('/').any(|part| part == "..") {
-                return Err(Error::unsupported(format!("the parent hint {hint:?} contains \"..\"")));
+                return Err(Error::unsupported_because(
+                    UnsupportedReason::ChainLeavesDatastore,
+                    format!("the parent hint {hint:?} contains \"..\""),
+                ));
             }
             return Ok(format!("/{path}"));
         }
-        return Err(Error::unsupported(format!(
-            "the parent {hint:?} is on another datastore ({datastore}); chains across datastores are not supported"
-        )));
+        return Err(Error::unsupported_because(
+            UnsupportedReason::ChainLeavesDatastore,
+            format!(
+                "the parent {hint:?} is on another datastore ({datastore}); chains across datastores are not supported"
+            ),
+        ));
     }
     sibling_path(descriptor_path, hint).map_err(|_| {
-        Error::unsupported(format!(
-            "the parent hint {hint:?} cannot be resolved inside this datastore"
-        ))
+        Error::unsupported_because(
+            UnsupportedReason::ChainLeavesDatastore,
+            format!("the parent hint {hint:?} cannot be resolved inside this datastore"),
+        )
     })
 }
 
@@ -671,10 +683,24 @@ mod tests {
                 .kind(),
             ErrorKind::Unsupported
         );
+        let outside = sibling_path("vm/a.vmdk", "../other/a-flat.vmdk").unwrap_err();
+        assert_eq!(outside.kind(), ErrorKind::Unsupported);
         assert_eq!(
-            sibling_path("vm/a.vmdk", "../other/a-flat.vmdk").unwrap_err().kind(),
-            ErrorKind::Unsupported
+            outside.unsupported_reason(),
+            Some(UnsupportedReason::ChainLeavesDatastore)
         );
+    }
+
+    #[test]
+    fn refusals_say_why() {
+        let reason = |kind: &ExtentType| unsupported_extent(kind).unsupported_reason();
+        assert_eq!(reason(&ExtentType::VmfsRdm), Some(UnsupportedReason::RawDeviceMapping));
+        assert_eq!(reason(&ExtentType::VmfsRaw), Some(UnsupportedReason::RawDeviceMapping));
+        assert_eq!(reason(&ExtentType::VmfsSparse), Some(UnsupportedReason::LegacySparse));
+        // Everything without a reason of its own is "not verified", and context keeps the reason.
+        let plain = Error::unsupported("x").context("disk");
+        assert_eq!(plain.unsupported_reason(), Some(UnsupportedReason::Unverified));
+        assert_eq!(Error::corrupt("x").unsupported_reason(), None);
     }
 
     #[test]

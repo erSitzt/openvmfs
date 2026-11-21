@@ -324,6 +324,8 @@ public sealed class SampleImageTests
         // A raw device mapping: the data is not on this volume.
         var unsupported = Assert.Throws<VmfsException>(() => volume.OpenDisk("rdm.vmdk"));
         Assert.Equal(VmfsErrorKind.Unsupported, unsupported.Kind);
+        Assert.Equal(VmfsUnsupportedReason.RawDeviceMapping, unsupported.UnsupportedReason);
+        Assert.Equal(VmfsUnsupportedReason.None, Assert.Throws<VmfsException>(() => volume.OpenDisk("missing.vmdk")).UnsupportedReason);
         Assert.Contains("raw device mapping", unsupported.Message);
 
         using var disk = volume.OpenDisk("normal.vmdk");

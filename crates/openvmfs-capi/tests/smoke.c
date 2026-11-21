@@ -60,6 +60,8 @@ static int check_caller_supplied_device(const char *image) {
     device.fail = 1;
     CHECK(ovmfs_disk_read(disk, range.offset, sector, sizeof sector, &error) == OVMFS_ERR_IO);
     CHECK(strstr(ovmfs_error_message(error), "status 5") != NULL);
+    CHECK(ovmfs_error_reason(error) == OVMFS_REASON_NONE);
+    CHECK(ovmfs_error_reason(NULL) == OVMFS_REASON_NONE);
     ovmfs_error_free(error);
     error = NULL;
     /* ... and it is released exactly once, when the last handle goes. */

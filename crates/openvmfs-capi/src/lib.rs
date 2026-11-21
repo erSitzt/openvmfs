@@ -13,10 +13,10 @@ use std::ffi::{c_char, c_void, CStr, CString};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::Arc;
 
-use openvmfs::{BlockSource, Disk, Error, ErrorKind, OpenOptions, Volume};
+use openvmfs::{BlockSource, Disk, Error, ErrorKind, OpenOptions, UnsupportedReason, Volume};
 
 /// Version of this interface. Changes when a function or structure changes incompatibly.
-pub const OVMFS_ABI_VERSION: u32 = 4;
+pub const OVMFS_ABI_VERSION: u32 = 5;
 
 /// Status codes. Zero is success.
 pub const OVMFS_OK: i32 = 0;
@@ -34,6 +34,23 @@ pub const OVMFS_ERR_INVALID_INPUT: i32 = 5;
 pub const OVMFS_ERR_INTERNAL: i32 = 6;
 /// A host had the file open for writing when the image was taken; what the image holds of it is not reliable.
 pub const OVMFS_ERR_IN_USE: i32 = 7;
+
+/// Reasons of `OVMFS_ERR_UNSUPPORTED`, see `ovmfs_error_reason`.
+pub const OVMFS_REASON_NONE: i32 = 0;
+/// A structure or value that has not been verified against data written by ESXi.
+pub const OVMFS_REASON_UNVERIFIED: i32 = 1;
+/// The disk is a raw device mapping.
+pub const OVMFS_REASON_RDM: i32 = 2;
+/// The disk is encrypted or uses another I/O filter.
+pub const OVMFS_REASON_ENCRYPTED: i32 = 3;
+/// A VMFS version other than 6.
+pub const OVMFS_REASON_OTHER_VMFS_VERSION: i32 = 4;
+/// A VMFS-L volume.
+pub const OVMFS_REASON_VMFS_L: i32 = 5;
+/// A snapshot delta in the older COWD format.
+pub const OVMFS_REASON_LEGACY_SPARSE: i32 = 6;
+/// A snapshot chain or extent that points outside the datastore.
+pub const OVMFS_REASON_CHAIN_LEAVES_DATASTORE: i32 = 7;
 
 /// Flag for `ovmfs_volume_open`: read structures that have not been verified against ESXi instead of refusing.
 pub const OVMFS_OPEN_ACCEPT_UNVERIFIED: u32 = 1;
@@ -65,6 +82,7 @@ pub struct ovmfs_disk(Disk);
 #[derive(Debug)]
 pub struct ovmfs_error {
     status: i32,
+    reason: i32,
     message: CString,
 }
 
@@ -114,13 +132,29 @@ fn status_of(kind: ErrorKind) -> i32 {
 
 struct Failure {
     status: i32,
+    reason: i32,
     message: String,
+}
+
+fn reason_of(error: &Error) -> i32 {
+    match error.unsupported_reason() {
+        None => OVMFS_REASON_NONE,
+        Some(UnsupportedReason::RawDeviceMapping) => OVMFS_REASON_RDM,
+        Some(UnsupportedReason::Encrypted) => OVMFS_REASON_ENCRYPTED,
+        Some(UnsupportedReason::OtherVmfsVersion) => OVMFS_REASON_OTHER_VMFS_VERSION,
+        Some(UnsupportedReason::VmfsL) => OVMFS_REASON_VMFS_L,
+        Some(UnsupportedReason::LegacySparse) => OVMFS_REASON_LEGACY_SPARSE,
+        Some(UnsupportedReason::ChainLeavesDatastore) => OVMFS_REASON_CHAIN_LEAVES_DATASTORE,
+        // Unverified, and any reason this interface does not know yet.
+        Some(_) => OVMFS_REASON_UNVERIFIED,
+    }
 }
 
 impl From<Error> for Failure {
     fn from(error: Error) -> Self {
         Failure {
             status: status_of(error.kind()),
+            reason: reason_of(&error),
             message: error.to_string(),
         }
     }
@@ -129,6 +163,7 @@ impl From<Error> for Failure {
 fn invalid(message: &str) -> Failure {
     Failure {
         status: OVMFS_ERR_INVALID_INPUT,
+        reason: OVMFS_REASON_NONE,
         message: message.to_owned(),
     }
 }
@@ -143,6 +178,7 @@ unsafe fn guarded(out_error: *mut *mut ovmfs_error, body: impl FnOnce() -> Resul
         Ok(Err(failure)) => failure,
         Err(_) => Failure {
             status: OVMFS_ERR_INTERNAL,
+            reason: OVMFS_REASON_NONE,
             message: "internal error (panic) in OpenVmfs".to_owned(),
         },
     };
@@ -151,6 +187,7 @@ unsafe fn guarded(out_error: *mut *mut ovmfs_error, body: impl FnOnce() -> Resul
         let message = CString::new(failure.message.replace('\0', " ")).unwrap_or_default();
         let error = Box::new(ovmfs_error {
             status: failure.status,
+            reason: failure.reason,
             message,
         });
         // SAFETY: the caller guarantees that a non-null `out_error` is valid for writing one pointer.
@@ -658,6 +695,17 @@ pub unsafe extern "C" fn ovmfs_disk_map(
 pub unsafe extern "C" fn ovmfs_error_status(error: *const ovmfs_error) -> i32 {
     // SAFETY: the caller guarantees null or a live error object.
     unsafe { error.as_ref() }.map_or(OVMFS_OK, |error| error.status)
+}
+
+/// Why something was refused: one of the `OVMFS_REASON_*` values. `OVMFS_REASON_NONE` for null and for every error
+/// whose status is not `OVMFS_ERR_UNSUPPORTED`.
+///
+/// # Safety
+/// `error` must be null or a live error object.
+#[no_mangle]
+pub unsafe extern "C" fn ovmfs_error_reason(error: *const ovmfs_error) -> i32 {
+    // SAFETY: the caller guarantees null or a live error object.
+    unsafe { error.as_ref() }.map_or(OVMFS_REASON_NONE, |error| error.reason)
 }
 
 /// Message of an error as NUL-terminated UTF-8, valid until the error is freed. An empty string for null.

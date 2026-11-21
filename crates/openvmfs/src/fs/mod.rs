@@ -620,7 +620,8 @@ impl Volume {
         match inode.kind {
             FileKind::Regular | FileKind::System if !inode.is_dir() => {}
             FileKind::RawDeviceMap => {
-                return Err(Error::unsupported(
+                return Err(Error::unsupported_because(
+                    crate::error::UnsupportedReason::RawDeviceMapping,
                     "raw device mapping: its data lives on another device and cannot be read from this volume",
                 ));
             }

@@ -50,6 +50,21 @@ Overrides: `replay_journal` applies what the host's journal holds and then opens
 | `copy-on-write` | A file with copy-on-write blocks | Not supported |
 | `journal ...` (only with `replay_journal`) | The journal holds something other than the transactions seen so far | Open without replay; disks that were in use stay refused |
 
+Programs should not match on the message. Every `Unsupported` error carries a reason for counting and reporting:
+
+| Reason | Rust `UnsupportedReason` | C `OVMFS_REASON_` | .NET `VmfsUnsupportedReason` |
+|---|---|---|---|
+| Not verified against data written by ESXi (every refusal without a reason of its own) | `Unverified` | `UNVERIFIED` | `Unverified` |
+| Raw device mapping | `RawDeviceMapping` | `RDM` | `RawDeviceMapping` |
+| Encrypted, or another I/O filter | `Encrypted` | `ENCRYPTED` | `Encrypted` |
+| VMFS3 or VMFS5 | `OtherVmfsVersion` | `OTHER_VMFS_VERSION` | `OtherVmfsVersion` |
+| VMFS-L | `VmfsL` | `VMFS_L` | `VmfsL` |
+| Snapshot delta in the COWD format | `LegacySparse` | `LEGACY_SPARSE` | `LegacySparse` |
+| A chain or extent that points outside the datastore | `ChainLeavesDatastore` | `CHAIN_LEAVES_DATASTORE` | `ChainLeavesDatastore` |
+
+Read it with `Error::unsupported_reason()`, `ovmfs_error_reason(error)` or `VmfsException.UnsupportedReason`. More
+reasons may be added; treat an unknown one like "not verified".
+
 "Tell us" means: such a volume is exactly what is missing to verify the case. A description of how it came to be
 (ESXi version, how the datastore was created) is valuable even without the image.
 

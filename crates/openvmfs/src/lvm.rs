@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use crate::bytes::{add, mul, View};
-use crate::error::{Error, Result, ResultExt};
+use crate::error::{Error, Result, ResultExt, UnsupportedReason};
 use crate::io::{check_range, read_vec, BlockSource};
 use crate::Uuid;
 
@@ -290,9 +290,10 @@ fn read_device(partition: &dyn BlockSource) -> Result<DeviceMetadata> {
     }
     let major_version = header.u32(0x04)?;
     if major_version != LVM6_MAJOR {
-        return Err(Error::unsupported(format!(
-            "LVM major version {major_version} (only LVM {LVM6_MAJOR}, as used by VMFS6, is supported)"
-        )));
+        return Err(Error::unsupported_because(
+            UnsupportedReason::OtherVmfsVersion,
+            format!("LVM major version {major_version} (only LVM {LVM6_MAJOR}, as used by VMFS6, is supported)"),
+        ));
     }
     let header_alignment = header.u32(0xCA)?;
     if header_alignment != 4096 {
@@ -302,9 +303,16 @@ fn read_device(partition: &dyn BlockSource) -> Result<DeviceMetadata> {
     }
     let flags = header.u32(0xD2)?;
     if flags != 0 {
-        return Err(Error::unsupported(format!(
-            "LVM device flags {flags:#x} (1 marks a VMFS-L volume; only plain VMFS6 volumes are supported)"
-        )));
+        // Flag 1 is VMFS-L; other flags have never been seen.
+        let reason = if flags == 1 {
+            UnsupportedReason::VmfsL
+        } else {
+            UnsupportedReason::Unverified
+        };
+        return Err(Error::unsupported_because(
+            reason,
+            format!("LVM device flags {flags:#x} (1 marks a VMFS-L volume; only plain VMFS6 volumes are supported)"),
+        ));
     }
     let volume_count = header.u32(0x66)?;
     if volume_count != 1 {

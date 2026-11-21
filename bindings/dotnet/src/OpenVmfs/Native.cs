@@ -8,7 +8,7 @@ internal static unsafe partial class Native
     private const string Library = "openvmfs_c";
 
     /// <summary>The interface version this binding was written for.</summary>
-    internal const uint AbiVersion = 4;
+    internal const uint AbiVersion = 5;
 
     internal const uint OpenAcceptUnverified = 1;
     internal const uint OpenDirect = 2;
@@ -95,6 +95,9 @@ internal static unsafe partial class Native
     internal static partial nint ovmfs_error_message(nint error);
 
     [LibraryImport(Library)]
+    internal static partial int ovmfs_error_reason(nint error);
+
+    [LibraryImport(Library)]
     internal static partial void ovmfs_error_free(nint error);
 
     /// <summary>Turns a failed status into an exception and frees the native error object.</summary>
@@ -109,13 +112,15 @@ internal static unsafe partial class Native
         }
 
         var message = "OpenVmfs failed without a message.";
+        var reason = VmfsUnsupportedReason.None;
         if (error != 0)
         {
             message = Marshal.PtrToStringUTF8(ovmfs_error_message(error)) ?? message;
+            reason = (VmfsUnsupportedReason)ovmfs_error_reason(error);
             ovmfs_error_free(error);
         }
 
-        throw new VmfsException((VmfsErrorKind)status, message, bridge?.TakeLastError());
+        throw new VmfsException((VmfsErrorKind)status, message, bridge?.TakeLastError()) { UnsupportedReason = reason };
     }
 }
 

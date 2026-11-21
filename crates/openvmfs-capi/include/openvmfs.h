@@ -24,7 +24,7 @@
 extern "C" {
 #endif
 
-#define OVMFS_ABI_VERSION 4
+#define OVMFS_ABI_VERSION 5
 
 #define OVMFS_OK 0
 #define OVMFS_ERR_IO 1            /* the device could not be read */
@@ -34,6 +34,17 @@ extern "C" {
 #define OVMFS_ERR_INVALID_INPUT 5
 #define OVMFS_ERR_INTERNAL 6      /* a bug in the library */
 #define OVMFS_ERR_IN_USE 7        /* a host was writing to the disk when the image was taken: snapshot the VM first */
+
+/* Why something was refused with OVMFS_ERR_UNSUPPORTED (ovmfs_error_reason). More may be added; treat unknown
+ * values like OVMFS_REASON_UNVERIFIED. */
+#define OVMFS_REASON_NONE 0                    /* the error is not OVMFS_ERR_UNSUPPORTED */
+#define OVMFS_REASON_UNVERIFIED 1              /* not verified against data written by ESXi */
+#define OVMFS_REASON_RDM 2                     /* raw device mapping: the data lives on another device */
+#define OVMFS_REASON_ENCRYPTED 3               /* encrypted, or another I/O filter */
+#define OVMFS_REASON_OTHER_VMFS_VERSION 4      /* VMFS3 or VMFS5 */
+#define OVMFS_REASON_VMFS_L 5                  /* VMFS-L, ESXi's own system partitions */
+#define OVMFS_REASON_LEGACY_SPARSE 6           /* snapshot delta in the older COWD format */
+#define OVMFS_REASON_CHAIN_LEAVES_DATASTORE 7  /* a snapshot chain or extent points outside the datastore */
 
 /* Read structures that have not been verified against ESXi instead of refusing them. For verification work. */
 #define OVMFS_OPEN_ACCEPT_UNVERIFIED 1u
@@ -148,6 +159,7 @@ int32_t ovmfs_disk_map(const ovmfs_disk *disk, uint64_t offset, uint64_t length,
                        size_t capacity, size_t *out_count, ovmfs_error **out_error);
 
 int32_t ovmfs_error_status(const ovmfs_error *error);
+int32_t ovmfs_error_reason(const ovmfs_error *error); /* OVMFS_REASON_* */
 const char *ovmfs_error_message(const ovmfs_error *error); /* valid until the error is freed */
 void ovmfs_error_free(ovmfs_error *error);
 

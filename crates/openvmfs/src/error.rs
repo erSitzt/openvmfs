@@ -25,6 +25,29 @@ pub enum ErrorKind {
     InUse,
 }
 
+/// Why something was refused with [`ErrorKind::Unsupported`], for callers that count or report refusals.
+///
+/// More reasons may be added; match with a wildcard arm.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum UnsupportedReason {
+    /// A structure or value that has not been verified against data written by ESXi. This is the reason of every
+    /// refusal that has no more specific one.
+    Unverified,
+    /// The disk is a raw device mapping: its data lives on another device.
+    RawDeviceMapping,
+    /// The disk is encrypted or uses another I/O filter; what is stored is not the disk's content.
+    Encrypted,
+    /// A VMFS version other than 6 (VMFS3, VMFS5).
+    OtherVmfsVersion,
+    /// A VMFS-L volume, which ESXi uses for its own system partitions.
+    VmfsL,
+    /// A snapshot delta in the older COWD format (`VMFSSPARSE`).
+    LegacySparse,
+    /// A snapshot chain or an extent that points outside the datastore.
+    ChainLeavesDatastore,
+}
+
 impl ErrorKind {
     fn label(self) -> &'static str {
         match self {
@@ -44,6 +67,7 @@ pub struct Error {
     kind: ErrorKind,
     message: String,
     source: Option<std::io::Error>,
+    reason: Option<UnsupportedReason>,
 }
 
 /// Result alias used throughout the crate.
@@ -56,6 +80,7 @@ impl Error {
             kind,
             message: message.into(),
             source: None,
+            reason: (kind == ErrorKind::Unsupported).then_some(UnsupportedReason::Unverified),
         }
     }
 
@@ -67,6 +92,13 @@ impl Error {
     /// The data uses something that has not been verified and is refused.
     pub fn unsupported(message: impl Into<String>) -> Self {
         Self::new(ErrorKind::Unsupported, message)
+    }
+
+    /// The data is refused for a reason that callers can tell apart.
+    pub fn unsupported_because(reason: UnsupportedReason, message: impl Into<String>) -> Self {
+        let mut error = Self::new(ErrorKind::Unsupported, message);
+        error.reason = Some(reason);
+        error
     }
 
     /// A host had the file open for writing when the image was taken.
@@ -90,12 +122,18 @@ impl Error {
             kind: ErrorKind::Io,
             message: context.into(),
             source: Some(source),
+            reason: None,
         }
     }
 
     /// The kind of this error.
     pub fn kind(&self) -> ErrorKind {
         self.kind
+    }
+
+    /// Why the data was refused: `Some` exactly when the kind is [`ErrorKind::Unsupported`].
+    pub fn unsupported_reason(&self) -> Option<UnsupportedReason> {
+        self.reason
     }
 
     /// The message without the kind prefix.

@@ -32,6 +32,37 @@ public enum VmfsErrorKind
     InUse = 7,
 }
 
+/// <summary>
+/// Why something was refused with <see cref="VmfsErrorKind.Unsupported"/>, for counting and reporting. More values
+/// may be added; treat unknown ones like <see cref="Unverified"/>.
+/// </summary>
+public enum VmfsUnsupportedReason
+{
+    /// <summary>The error is not <see cref="VmfsErrorKind.Unsupported"/>.</summary>
+    None = 0,
+
+    /// <summary>A structure or value that has not been verified against data written by ESXi.</summary>
+    Unverified = 1,
+
+    /// <summary>The disk is a raw device mapping: its data lives on another device.</summary>
+    RawDeviceMapping = 2,
+
+    /// <summary>The disk is encrypted or uses another I/O filter.</summary>
+    Encrypted = 3,
+
+    /// <summary>A VMFS version other than 6 (VMFS3, VMFS5).</summary>
+    OtherVmfsVersion = 4,
+
+    /// <summary>A VMFS-L volume, which ESXi uses for its own system partitions.</summary>
+    VmfsL = 5,
+
+    /// <summary>A snapshot delta in the older COWD format.</summary>
+    LegacySparse = 6,
+
+    /// <summary>A snapshot chain or an extent that points outside the datastore.</summary>
+    ChainLeavesDatastore = 7,
+}
+
 /// <summary>An error reported by OpenVmfs. The message names the structure, field and offset involved.</summary>
 public sealed class VmfsException : Exception
 {
@@ -44,4 +75,10 @@ public sealed class VmfsException : Exception
 
     /// <summary>The kind of error.</summary>
     public VmfsErrorKind Kind { get; }
+
+    /// <summary>
+    /// Why the data was refused, when <see cref="Kind"/> is <see cref="VmfsErrorKind.Unsupported"/>; otherwise
+    /// <see cref="VmfsUnsupportedReason.None"/>.
+    /// </summary>
+    public VmfsUnsupportedReason UnsupportedReason { get; init; }
 }

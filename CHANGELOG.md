@@ -3,6 +3,17 @@
 Each release lists what a program that embeds OpenVmfs has to know: changes to the API or the C interface, changes
 in what is read and what is refused, and corrected read errors (data that an earlier version returned wrongly).
 
+## 0.4.0
+
+- **API and C interface:** every `Unsupported` error now says why, for counting and reporting:
+  `Error::unsupported_reason()` (Rust, new enum `UnsupportedReason`), `ovmfs_error_reason()` with `OVMFS_REASON_*`
+  (C), `VmfsException.UnsupportedReason` (.NET). The reasons are: not verified, raw device mapping, encrypted or
+  I/O filter, other VMFS version, VMFS-L, COWD delta, chain leaves the datastore. C interface version 5: the
+  .NET binding and the native library must both be 0.4.0. Existing calls are unchanged.
+- **Read or refused:** unchanged.
+- **Corrected read errors:** none.
+- `openvmfs` no longer reports an error when its output is closed early (`| head`).
+
 ## 0.3.1
 
 - **API and C interface:** unchanged (interface version 4).

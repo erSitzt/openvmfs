@@ -17,7 +17,7 @@
 
 use std::sync::Arc;
 
-use openvmfs::{BlockSource, ErrorKind, ExtentKind, FileKind, FileSource, Volume};
+use openvmfs::{BlockSource, ErrorKind, ExtentKind, FileKind, FileSource, UnsupportedReason, Volume};
 use openvmfs_testkit::{external_image, sha256_hex, sha256_of, MutatedSource, Rng, TracingSource};
 
 const MIB: u64 = 1 << 20;
@@ -223,7 +223,11 @@ fn empty_thin_disk() {
 fn what_cannot_be_read_is_refused() {
     let Some(volume) = open("vmfs/vmfs6") else { return };
     // A raw device mapping: the descriptor says so, and the mapping file itself is refused too.
-    assert_eq!(volume.open_disk("rdm.vmdk").unwrap_err().kind(), ErrorKind::Unsupported);
+    let rdm = volume.open_disk("rdm.vmdk").unwrap_err();
+    assert_eq!(rdm.kind(), ErrorKind::Unsupported);
+    assert_eq!(rdm.unsupported_reason(), Some(UnsupportedReason::RawDeviceMapping));
+    // Only refusals carry a reason.
+    assert_eq!(volume.open_disk("missing.vmdk").unwrap_err().unsupported_reason(), None);
     assert_eq!(
         volume.open_file("rdm-rdm.vmdk").unwrap_err().kind(),
         ErrorKind::Unsupported
@@ -247,7 +251,9 @@ fn what_cannot_be_read_is_refused() {
 
     // VMFS-L (the ESXi system volume flavour) is not a datastore.
     if let Some(image) = external_image("vmfs/vmfs6l") {
-        assert_eq!(Volume::open_path(image).unwrap_err().kind(), ErrorKind::Unsupported);
+        let error = Volume::open_path(image).unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::Unsupported);
+        assert_eq!(error.unsupported_reason(), Some(UnsupportedReason::VmfsL));
     }
 }
 

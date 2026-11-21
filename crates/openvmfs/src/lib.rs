@@ -47,7 +47,7 @@ pub mod vmdk;
 
 use std::fmt;
 
-pub use error::{Error, ErrorKind, Result};
+pub use error::{Error, ErrorKind, Result, UnsupportedReason};
 pub use fs::{
     DirEntry, Extent, ExtentKind, File, FileKind, FileStat, JournalStatus, LockMode, OpenOptions, Volume, VolumeInfo,
 };
