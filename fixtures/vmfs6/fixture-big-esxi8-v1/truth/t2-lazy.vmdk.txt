@@ -1,0 +1,20 @@
+# Disk DescriptorFile
+version=1
+encoding="UTF-8"
+CID=fffffffe
+parentCID=ffffffff
+createType="vmfs"
+
+# Extent description
+RW 4194304 VMFS "lazy-flat.vmdk"
+
+# The Disk Data Base 
+#DDB
+
+ddb.adapterType = "lsilogic"
+ddb.geometry.cylinders = "261"
+ddb.geometry.heads = "255"
+ddb.geometry.sectors = "63"
+ddb.longContentID = "8be3f826a8e7de7d1280be49fffffffe"
+ddb.uuid = "60 00 C2 94 77 9e 32 df-f1 94 ea ca 42 69 a1 be"
+ddb.virtualHWVersion = "14"

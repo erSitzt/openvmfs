@@ -180,6 +180,17 @@ logical volume has a second extent behind a 16 MiB gap. Partial image: 92 MiB of
 `fixture-big-v1/truth/`: ESXi's hashes of both flat files, their block maps (`*.t0.txt`), `vmkfstools -D` and
 `-Ph` output, the partition table.
 
+## fixture-big-esxi8-v1
+
+A 40 TiB datastore made by ESXi 8.0 U3 (thin device), so its logical volume has three extents: one more behind a
+16 MiB gap at every 16 TiB. Filled with eight lazily allocated disks of 4100 GiB in two rounds (`fill/`), with a
+thin disk of 1 GiB and a lazy-zeroed disk of 2 GiB created after each round (`t1/`, `t2/`). ESXi put `t1/lazy`
+into the second extent and the other three into the third, near the end of the volume. Partial image: 105 MiB of
+the device, 0.2 MiB packed.
+
+`fixture-big-esxi8-v1/truth/`: ESXi's hashes of the four flat files, their block maps (`*.t0.txt`), `vmkfstools -D`
+and `-Ph` output, the descriptors, the partition table.
+
 ## fixture-span-v1
 
 A datastore that ESXi 7.0.3 created on a 3 GiB device and then extended onto a 2 GiB device (`vmkfstools -Z`).

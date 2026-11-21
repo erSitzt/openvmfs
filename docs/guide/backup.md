@@ -122,8 +122,8 @@ is one request to the device; when the device is behind a network, multiply by i
 
 | Step | Reads from the device | Bytes | Notes |
 |---|---|---|---|
-| Open a volume | 23 | 4.2 MiB | The same for 4 GiB, 256 GiB and 17 TiB datastores. One read is 4 MiB, the rest are small |
-| Open a base disk | about 15, plus one per 8 GiB of disk size | 64 KiB per 8 GiB | 200 GiB thick: 42 reads, 1.7 MiB. 4 TiB thin: 23 reads, because unallocated parts have no pointer blocks |
+| Open a volume | 23 or 24 | 4.2 MiB | Nearly the same from 4 GiB to 40 TiB: one more read for each extent of the volume (every 16 TiB). One read is 4 MiB, the rest are small |
+| Open a base disk | about 15, plus one per 8 GiB of disk size | 64 KiB per 8 GiB | 200 GiB thick: 42 reads, 1.7 MiB; 4100 GiB thick: 533 reads, 33 MiB. 4 TiB thin: 23 reads, because unallocated parts have no pointer blocks |
 | Each snapshot delta in the chain | about 25, plus its grain tables | 32 KiB per 16 MiB of disk the delta has touched | Tables that lie next to each other are fetched in one read of up to 4 MiB |
 
 All reads of one open happen one after the other.

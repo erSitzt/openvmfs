@@ -1,0 +1,7 @@
+Lock [type 10c00001 offset 455622656 v 13, hb offset 3473408
+gen 7, mode 0, owner 00000000-00000000-0000-000000000000 mtime 2141171
+num 0 gblnum 0 gblgen 0 gblbrk 0]
+Addr <4, 53, 2>, gen 3, links 1, type reg, flags 0x2, uid 0, gid 0, mode 600
+len 2147483648, nb 2048 tbz 2045, cow 0, newSinceEpoch 2048, zla 3, bs 1048576
+affinityFD <4,38,2>, parentFD <4,38,2>, tbzGranularityShift 20, numLFB 4
+lastSFBClusterNum 0, numPreAllocBlocks 0, numPointerBlocks 1

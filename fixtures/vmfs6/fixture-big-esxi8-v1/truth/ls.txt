@@ -1,0 +1,39 @@
+fill:
+total 34393293984
+drwxr-xr-x    1 root     root         77824 Nov 21 22:36 .
+drwxr-xr-t    1 root     root         73728 Nov 21 22:35 ..
+-rw-------    1 root     root     4402341478400 Nov 21 22:35 s1-f1-flat.vmdk
+-rw-------    1 root     root           449 Nov 21 22:35 s1-f1.vmdk
+-rw-------    1 root     root     4402341478400 Nov 21 22:35 s1-f2-flat.vmdk
+-rw-------    1 root     root           449 Nov 21 22:35 s1-f2.vmdk
+-rw-------    1 root     root     4402341478400 Nov 21 22:35 s1-f3-flat.vmdk
+-rw-------    1 root     root           449 Nov 21 22:35 s1-f3.vmdk
+-rw-------    1 root     root     4402341478400 Nov 21 22:35 s1-f4-flat.vmdk
+-rw-------    1 root     root           449 Nov 21 22:35 s1-f4.vmdk
+-rw-------    1 root     root     4402341478400 Nov 21 22:35 s2-f1-flat.vmdk
+-rw-------    1 root     root           449 Nov 21 22:36 s2-f1.vmdk
+-rw-------    1 root     root     4402341478400 Nov 21 22:36 s2-f2-flat.vmdk
+-rw-------    1 root     root           449 Nov 21 22:36 s2-f2.vmdk
+-rw-------    1 root     root     4402341478400 Nov 21 22:36 s2-f3-flat.vmdk
+-rw-------    1 root     root           449 Nov 21 22:36 s2-f3.vmdk
+-rw-------    1 root     root     4402341478400 Nov 21 22:36 s2-f4-flat.vmdk
+-rw-------    1 root     root           449 Nov 21 22:36 s2-f4.vmdk
+
+t1:
+total 2103432
+drwxr-xr-x    1 root     root         73728 Nov 21 22:35 .
+drwxr-xr-t    1 root     root         73728 Nov 21 22:35 ..
+-rw-------    1 root     root     2147483648 Nov 21 22:35 lazy-flat.vmdk
+-rw-------    1 root     root           442 Nov 21 22:35 lazy.vmdk
+-rw-------    1 root     root     1073741824 Nov 21 22:35 thin-flat.vmdk
+-rw-------    1 root     root           468 Nov 21 22:35 thin.vmdk
+
+t2:
+total 2103432
+drwxr-xr-x    1 root     root         73728 Nov 21 22:36 .
+drwxr-xr-t    1 root     root         73728 Nov 21 22:35 ..
+-rw-------    1 root     root     2147483648 Nov 21 22:36 lazy-flat.vmdk
+-rw-------    1 root     root           442 Nov 21 22:36 lazy.vmdk
+-rw-------    1 root     root     1073741824 Nov 21 22:36 thin-flat.vmdk
+-rw-------    1 root     root           468 Nov 21 22:36 thin.vmdk
+VMFS-6      41942784 33594455   8348329  80% /vmfs/volumes/fb8

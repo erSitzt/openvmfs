@@ -1,0 +1,4 @@
+319cd75514c3fb937c3c29472e9dd1e5d39255dcc235925707dc5b87642c94c0  t1/thin-flat.vmdk
+5f297dcfe6eee7b198a0255d8cfe49fc2ff358297e9133fceb792b27cec52cf9  t1/lazy-flat.vmdk
+2c06944a88f96dcd88f6b0a4f366cab7e1d7c0ac31aaa07c079a6121919fdbb1  t2/thin-flat.vmdk
+a3e1345d7472b3a126fc8a2bf948aab7f199cd9abddfaa9d66f9f08c3430d780  t2/lazy-flat.vmdk

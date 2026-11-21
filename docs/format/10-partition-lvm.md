@@ -26,7 +26,7 @@ At partition offset **0x100000**, magic **0xC001D00D** **[V]**.
 | 0x5A | 4 | disk block size | 512 **[V]** |
 | 0x5E | 8 | total bytes of the device | **[V]** |
 | 0x66 | 4 | number of volumes | 1 **[V]** |
-| 0x6A | 4 | number of entries in the physical-extent table | 1 **[V]**; 2 on a 17 TiB volume **[V]** |
+| 0x6A | 4 | number of entries in the physical-extent table | 1 **[V]**; 2 on a 17 TiB volume, 3 on a 40 TiB volume **[V]** |
 | 0x6E | 4 | last physical-extent index | **[1]** |
 | 0x72 | 8 | generation | **[1]** |
 | 0x7A | 8 | data offset | 0x1100000 **[V]** |

@@ -45,7 +45,7 @@ has another way to read the data should fall back to it.
 | Zero grains in snapshot deltas, deltas in the older COWD format, chains across datastores | Never seen, or not created by VMFS6 |
 | Journals that hold anything but the transaction shape seen so far (only when replay is asked for) | Not understood |
 | VMFS5, VMFS-L, VMFS 6.81, 4Kn devices | No verified sample yet |
-| Extended LVM extent metadata | Never seen; datastores of 3 TiB and 17 TiB do not use it |
+| Extended LVM extent metadata | Never seen; datastores of 3 TiB, 17 TiB and 40 TiB do not use it |
 | Raw device mappings, encrypted disks | The data is not on the volume, or not readable |
 
 `OpenOptions::accept_unverified` (CLI: `OPENVMFS_ACCEPT_UNVERIFIED=1`) reads the first of these anyway. It is meant

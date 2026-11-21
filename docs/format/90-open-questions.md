@@ -16,7 +16,7 @@ by ESXi that holds reference data whose position is known.
 
 | # | Question |
 |---|---|
-| 7 | Extended LVM metadata regions and more than one extent map: when does ESXi create them? Not at 17 TiB. Refused. |
+| 7 | Extended LVM metadata regions and more than one extent map: when does ESXi create them? Not at 17 TiB (ESXi 7.0.3) and not at 40 TiB (ESXi 8.0 U3). Refused. |
 | 8 | Volumes on several devices. Sample images exist. |
 | 9 | VMFS 6.81: what differs from 6.82? |
 | 10 | Devices with 4096-byte logical sectors, and metadata alignments other than 4096. |
@@ -50,7 +50,7 @@ by ESXi that holds reference data whose position is known.
 | When does ESXi use large file blocks? | For thick disks, on datastores large enough: ESXi set aside up to 256 large blocks (128 GiB) for small-block clusters, so the 4 and 16 GiB datastores had none to give. | `vmkfstools -Ph` and `-D` on 4, 16 and 256 GiB datastores |
 | Do writes from a guest leave the same metadata as writes from the ESXi shell? | Yes, for thin and lazy-zeroed disks written through a paravirtual SCSI controller: holes, per-MiB "to be zeroed" marks and the zeroing of a partly written MiB are the same. | `fixture-guest-v1` |
 | How does a range read that the guest discarded after a snapshot (SESparse type 1)? | As zeros, not from the parent. ESXi's consolidation and QEMU agree. | `fixture-chain-v2` |
-| How is a volume above 16 TiB laid out? | One extent entry per 16 TiB, 16 MiB apart on the device; no extended metadata at 17 TiB. | `fixture-big-v1` |
+| How is a volume above 16 TiB laid out? | One extent entry per 16 TiB, 16 MiB apart on the device; no extended metadata at 17 TiB or 40 TiB. | `fixture-big-v1`, `fixture-big-esxi8-v1` |
 | How is a datastore on several devices laid out? | One LVM header per device, extent entries with volume-wide logical offsets; files may lie on any device. | `fixture-span-v1` |
 | What does the delta look like that a running VM writes to? | Its "replay journal" flag is 1, and up to 1.3 s after its creation its tables showed none of the data written since. Refused. | `probe-series1` |
 | Can a disk be read from a storage snapshot while its VM writes to it? | No: block allocations of the last seconds are missing from the block map. The on-disk lock mode tells such files apart. | `fixture-inuse-v1` |

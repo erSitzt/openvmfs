@@ -1,0 +1,22 @@
+VMFS-6.82 (Raw Major Version: 24) file system spanning 1 partitions.
+File system label (if any): fb8
+Mode: public ATS+SCSI
+Capacity 40 TB, 8.0 TB available, file block size 1 MB, max supported file size 64 TB
+Volume Creation Time: Sat Nov 21 22:35:24 2026
+Files (max/free): 16384/16347
+Ptr Blocks (max/free): 0/0
+Sub Blocks (max/free): 32768/28645
+Secondary Ptr Blocks (max/free): 256/255
+File Blocks (overcommit/used/overcommit %): 0/33594455/0
+Ptr Blocks  (overcommit/used/overcommit %): 0/0/0
+Sub Blocks  (overcommit/used/overcommit %): 0/4123/0
+Large File Blocks (total/used/file block clusters): 81920/65608/376
+Volume Metadata size: 3293708288
+Disk Block Size: 512/512/0
+UUID: 6b021cac-48f63782-dd8b-0050568b0de0
+Logical device: 6b021cac-28ff3c10-4079-0050568b0de0
+Partitions spanned (on "lvm"):
+	naa.6000c298322376e888837a0fa8c8b501:1
+Is Native Snapshot Capable: NO
+OBJLIB-LIB: ObjLib cleanup done.
+WORKER: asyncOps=0 maxActiveOps=0 maxPending=0 maxCompleted=0

@@ -3,6 +3,11 @@
 Each release lists what a program that embeds OpenVmfs has to know: changes to the API or the C interface, changes
 in what is read and what is refused, and corrected read errors (data that an earlier version returned wrongly).
 
+## Not released yet
+
+- Verified on a 40 TiB datastore made by ESXi 8.0 U3 (`fixture-big-esxi8-v1`): disks behind the first and the
+  second 16 TiB boundary read as on ESXi. No change to the library was needed.
+
 ## 0.4.0
 
 - **API and C interface:** every `Unsupported` error now says why, for counting and reporting:
