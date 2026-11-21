@@ -51,6 +51,20 @@ Set OPENVMFS_ACCEPT_UNVERIFIED=1 to read structures that have not been verified 
 const CHUNK: usize = 1 << 20;
 
 fn main() -> ExitCode {
+    // `println!` panics when standard output is closed, which is what `openvmfs info ... | head -3` does to it.
+    // That is the reader's decision, not a failure: end quietly.
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let message = info
+            .payload()
+            .downcast_ref::<String>()
+            .map(String::as_str)
+            .unwrap_or_default();
+        if message.starts_with("failed printing to stdout") {
+            std::process::exit(0);
+        }
+        default_hook(info);
+    }));
     let args: Vec<String> = std::env::args().skip(1).collect();
     let args: Vec<&str> = args.iter().map(String::as_str).collect();
     match run(&args) {
