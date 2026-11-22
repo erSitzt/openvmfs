@@ -58,8 +58,8 @@ been tested.
 | Disks written by a Linux guest (paravirtual SCSI) | ✓ | ✓ | `fixture-guest-v1`, `fixture-chain-esxi8-v1` |
 | Thin disks filled by a guest front to back and at random | not run | ✓ | measured, [`docs/guide/backup.md`](docs/guide/backup.md) |
 | Snapshot chain of three deltas with guest discards | ✓ | ✓ | `fixture-chain-v2`, `fixture-chain-esxi8-v1` |
-| Chain of eleven deltas, snapshots deleted in the middle while the VM ran (deltas merged, zero grains) | not run | ✓ | `fixture-merge-esxi8-v1` |
-| Disks on LSI Logic SAS, SATA and NVMe controllers, and a disk with changed-block tracking, each with that chain | not run | ✓ | measured: 25 reads at five levels equal ESXi's consolidation |
+| Chain of eleven deltas, snapshots deleted in the middle while the VM ran (deltas merged, zero grains) | ✓ | ✓ | `fixture-merge-esxi8-v1`; on 7.0.3 read once, not kept as a fixture |
+| Disks on LSI Logic SAS, SATA and NVMe controllers, and a disk with changed-block tracking, each with that chain | ✓ | ✓ | measured: 20 reads (7.0.3) and 25 reads (8.0 U3) at four or five levels equal ESXi's consolidation |
 | Snapshot delta of a million random 4 KiB writes | not run | ✓ | measured, same guide |
 | Datastore above 16 TiB | ✓ 17 TiB | ✓ 40 TiB | `fixture-big-v1`, `fixture-big-esxi8-v1` |
 | Datastore on two devices | ✓ | ✓ | `fixture-span-v1`, `fixture-span-esxi8-v1` |

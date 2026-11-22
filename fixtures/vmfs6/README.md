@@ -305,3 +305,6 @@ reported them as not supported.
 
 Partial image (91 MiB of the device, 4.8 MiB packed): the tables of the `pv` and `nvme` chains and nine single
 megabytes, whose hashes from ESXi's consolidations are in `truth/mib.sha256.txt`.
+
+The same procedure on ESXi 7.0.3 gave zero grains in the same places, and 20 reads (five disks, four levels) had
+the hashes of ESXi's consolidations. That image is not kept.

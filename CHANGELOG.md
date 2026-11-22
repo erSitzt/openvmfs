@@ -14,7 +14,7 @@ in what is read and what is refused, and corrected read errors (data that an ear
   when a snapshot is deleted and its delta is merged into the parent delta, for ranges the guest had discarded.
   OpenVmfs up to 0.4.1 refused such a disk with `Unsupported` ("zero grain (type 2)"), which could happen to any
   VM whose guest discards (TRIM) and whose snapshots are deleted from the middle of a chain. Verified on
-  ESXi 8.0 U3 against its own consolidation (`fixture-merge-esxi8-v1`).
+  ESXi 7.0.3 and 8.0 U3 against their own consolidation (`fixture-merge-esxi8-v1`).
 - Verified on a datastore that ESXi 8.0 U3 extended onto a second device (`fixture-span-esxi8-v1`). No change to
   the library was needed.
 

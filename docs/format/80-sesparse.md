@@ -85,7 +85,8 @@ consolidation of the chain has nothing there, and neither does QEMU's conversion
 the parent would return the old data. One level up, 8 sectors written into the discarded MiB read back, and the
 rest of the MiB stays zero.
 
-How type 2 was settled, and where it comes from (`fixture-merge-esxi8-v1`, ESXi 8.0 U3): ESXi writes zero grains
+How type 2 was settled, and where it comes from (`fixture-merge-esxi8-v1`, ESXi 8.0 U3; ESXi 7.0.3 wrote the same
+entries in the same places): ESXi writes zero grains
 when a snapshot is deleted and the delta of that snapshot is merged into its **parent delta**. Every range the
 guest had discarded in the merged delta (type 1 there) is a zero grain in the parent afterwards; discards that the
 parent delta received directly stay type 1. A guest discarded 1 MiB that held data in the base and 1 MiB that held
