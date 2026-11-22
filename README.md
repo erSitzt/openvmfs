@@ -39,21 +39,39 @@ against the hashes and block maps ESXi itself reports, and file by file against 
 
 ## What has been tested
 
-Everything in this table is checked by the test suite against data captured from ESXi
+Everything in these tables is checked by the test suite against data captured from ESXi
 ([`fixtures/vmfs6/README.md`](fixtures/vmfs6/README.md)), or was measured in the lab and written down
 ([`docs/consistency.md`](docs/consistency.md), [`docs/guide/backup.md`](docs/guide/backup.md)).
 
+**By ESXi version.** ✓ means: read by OpenVmfs and equal to what ESXi reports. "not run" means that nobody
+tried, not that it fails. Both versions format VMFS 6.82. Any other ESXi version would be a new column: none has
+been tested.
+
+| What was read | ESXi 7.0.3 | ESXi 8.0 U3 | Evidence |
+|---|:---:|:---:|---|
+| Small files, directories, symbolic links | ✓ | ✓ | `fixture-zero-v1`, `fixture-basic-esxi8-v1` |
+| Thin disks, with holes | ✓ | ✓ | same |
+| Lazy-zeroed thick disks over stale data, eager-zeroed disks | ✓ | ✓ | same |
+| Thick disks made of large file blocks (512 MiB) | ✓ | ✓ | `fixture-lfb-v1`, `fixture-big-esxi8-v1` |
+| Disks over 2.5 TiB (two levels of pointer blocks, up to 42 TiB thin) | ✓ | ✓ | `fixture-double-v1`; on 8.0 U3 read once, not kept as a fixture |
+| Disks written by a Linux guest (paravirtual SCSI) | ✓ | ✓ | `fixture-guest-v1`, `fixture-chain-esxi8-v1` |
+| Thin disks filled by a guest front to back and at random | not run | ✓ | measured, [`docs/guide/backup.md`](docs/guide/backup.md) |
+| Snapshot chain of three deltas with guest discards | ✓ | ✓ | `fixture-chain-v2`, `fixture-chain-esxi8-v1` |
+| Snapshot delta of a million random 4 KiB writes | not run | ✓ | measured, same guide |
+| Datastore above 16 TiB | ✓ 17 TiB | ✓ 40 TiB | `fixture-big-v1`, `fixture-big-esxi8-v1` |
+| Datastore on two devices | ✓ | not run | `fixture-span-v1` |
+| 100,000 small files on one datastore | not run (56,848) | ✓ | `fixture-many-esxi8-v1` |
+| More than 131,072 sub-blocks | not run | ✓ | `fixture-pb2-esxi8-v1` |
+| Disk below a VM snapshot, on a storage snapshot of the running VM | ✓ 9 of 9 | ✓ 7 of 7 | [`docs/consistency.md`](docs/consistency.md) |
+| Disk of a writing VM without a VM snapshot: incomplete on the storage snapshot, so OpenVmfs refuses it | 10 of 10 incomplete | 5 of 5 incomplete | same |
+| The same disk with the journal replayed (experimental) | ✓ 5 of 5 | ✓ 5 of 5 | same, `fixture-journal-v1` |
+
+**Everything else was the same in all tests:**
+
 | Area | Tested with |
 |---|---|
-| ESXi version | 7.0.3 and 8.0 U3, both formatting VMFS 6.82 |
 | Where ESXi ran | Nested, as a virtual machine; one host per datastore |
 | Devices under the datastore | Virtual disks with 512-byte sectors; images of them, read from files, buffered and unbuffered |
-| Datastore size | 4 GiB to 40 TiB on one device (one to three extents), and one datastore on two devices |
-| Number of files | 100,000 small files on one datastore; sub-block pool grown past 131,072 sub-blocks |
-| Base disks | Thin up to 42 TiB (two levels of pointer blocks); thick lazy-zeroed and eager-zeroed, with small and with large file blocks; thin disks filled by a guest front to back and at random |
-| Who wrote the data | The ESXi shell, `vmkfstools`, and a Linux guest through a paravirtual SCSI controller |
-| Snapshot chains | Up to three SESparse deltas over a base, with guest discards in between; a delta of a million random 4 KiB writes. Compared with ESXi's own consolidation and with QEMU |
-| Datastore in use | Storage snapshot of a running VM after a VM snapshot: correct in 16 of 16 runs. Without a VM snapshot: refused; with journal replay, correct for 10 of 10 images |
 | Reference for "correct" | Hashes and block maps printed by ESXi, self-describing test sectors, and an independent reader (dissect.vmfs) file by file |
 | Where OpenVmfs ran | Linux x64 and Windows x64 (every push runs the Rust tests on both); the C interface and the .NET 10 binding on Linux on every push, on Windows with `tools/windows-remote-test.py` |
 | Raw disks on Windows | Opening `\\.\PhysicalDriveN` and reading it unbuffered works; a datastore has not yet been read that way |
@@ -77,7 +95,8 @@ other data you would not publish; the messages of `openvmfs` contain file names 
 
 | Not tested yet | What a report would show |
 |---|---|
-| ESXi 6.7, 7.0 before U3, 8.0 before U3, ESXi 9 | Whether their datastores look the same. VMFS 6.81 is refused today for lack of a sample |
+| Any ESXi version other than 7.0.3 and 8.0 U3: 6.7, earlier updates of 7.0 and 8.0, ESXi 9 | A new column in the matrix above. VMFS 6.81 is refused today for lack of a sample |
+| The "not run" cells of the matrix | The same check on the other version |
 | Datastores that were upgraded with their hosts over the years | Whether older formatting leaves layouts a fresh datastore does not have |
 | Real storage arrays: Fibre Channel, iSCSI, NVMe over fabrics, any vendor | That an array snapshot presented to another machine reads like the images in our lab |
 | Devices with 4096-byte sectors (4Kn; 512e should behave like 512n) | 4Kn is refused today; `openvmfs info` output of such a datastore is the first step |
