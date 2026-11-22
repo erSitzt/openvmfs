@@ -63,6 +63,7 @@ been tested.
 | Snapshot delta of a million random 4 KiB writes | ✓ | ✓ | measured, same guide: SHA-256 equal to ESXi's consolidation |
 | Datastore above 16 TiB | ✓ 17 TiB | ✓ 40 TiB | `fixture-big-v1`, `fixture-big-esxi8-v1` |
 | Datastore on two devices | ✓ | ✓ | `fixture-span-v1`, `fixture-span-esxi8-v1` |
+| Datastore on three devices, the first one enlarged and grown in place afterwards | not run | ✓ | `fixture-span3-esxi8-v1` |
 | More than 100,000 small files on one datastore | ✓ 132,000 | ✓ 100,697 | `fixture-pb2-v1`, `fixture-many-esxi8-v1`, `fixture-pb2-esxi8-v1` |
 | More than 131,072 sub-blocks | ✓ | ✓ | `fixture-pb2-v1`, `fixture-pb2-esxi8-v1` |
 | Disk below a VM snapshot, on a storage snapshot of the running VM | ✓ 9 of 9 | ✓ 7 of 7 | [`docs/consistency.md`](docs/consistency.md) |
@@ -110,7 +111,7 @@ other data you would not publish; the messages of `openvmfs` contain file names 
 | Devices with 4096-byte sectors (4Kn; 512e should behave like 512n) | 4Kn is refused today; `openvmfs info` output of such a datastore is the first step | none |
 | Datastores shared by a cluster of hosts, with many running VMs | Lock states and journals of several hosts at once; our datastores had one host | Two hosts, 17 running VMs (#1) |
 | Long-lived, fragmented, nearly full datastores | Block maps and resource pools that a lab does not produce in a week | none |
-| Datastores extended over more than two devices, or grown in place | Extent tables beyond the ones we saw | none |
+| Datastores extended over more than three devices, or grown in place several times | Extent tables beyond the ones we saw | none |
 | Windows guests | Whether they leave anything different in thin disks and deltas | Windows Server 2022, one run (#1) |
 | Snapshot chains made by backup products, chains longer than twelve links | SESparse features ESXi never wrote for us. Deleting snapshots in our lab produced one we had refused until then (zero grains) | none |
 | Multi-writer disks, linked clones, Horizon and vSphere Replication disks | Whether they open, and which refusal they hit | none |

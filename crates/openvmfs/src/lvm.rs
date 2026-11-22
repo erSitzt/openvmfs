@@ -56,9 +56,10 @@ pub struct LvmDevice {
     pub scsi_vendor: String,
     /// See [`LvmDevice::scsi_vendor`].
     pub scsi_model: String,
-    /// Where this device's share of the volume starts, in bytes of the volume. 0 on the first device.
+    /// Where this device's share of the volume starts, in bytes of the volume. 0 on the first device. A device that
+    /// was grown in place has a further part at the end of the volume, behind the devices added before the growth.
     pub volume_start: u64,
-    /// Size of this device's share of the volume in bytes.
+    /// Size of this device's share of the volume in bytes, all parts together.
     pub volume_len: u64,
 }
 
@@ -96,9 +97,8 @@ struct Run {
 struct DeviceMetadata {
     info: LvmDevice,
     volume: LvmVolume,
-    /// First and last 256 MiB unit of the volume on this device.
+    /// First 256 MiB unit of the volume on this device.
     first_unit: u64,
-    last_unit: u64,
     /// Extents on this device as (logical offset, offset in the partition, length).
     extents: Vec<(u64, u64, u64)>,
 }
@@ -207,18 +207,9 @@ impl LogicalVolume {
                 },
             )));
         }
-        // Each device continues where the one before it ends.
-        let mut next_unit = 0u64;
-        for (index, device) in &order {
-            if device.first_unit != next_unit {
-                return Err(Error::corrupt(format!(
-                    "device {index} starts at extent {} of the volume, expected {next_unit}",
-                    device.first_unit
-                )));
-            }
-            next_unit = add(device.last_unit, 1, "LVM extent number")?;
-        }
-
+        // The devices need not follow each other in the volume: when a device is grown in place, ESXi appends its
+        // new extents at the end of the volume, behind the devices that were added before. `merge_runs` checks
+        // that all extents together cover the volume once.
         let mut runs = Vec::new();
         for (index, device) in &order {
             let partition_len = partitions.get(*index).map_or(0, |partition| partition.len());
@@ -415,7 +406,10 @@ fn read_device(partition: &dyn BlockSource) -> Result<DeviceMetadata> {
     }
 
     let scsi = View::new("LVM device SCSI id", DEVICE_HEADER_OFFSET, header.bytes(0x0C, 78)?);
-    let unit_count = add(last_unit.saturating_sub(first_unit), 1, "LVM extent count")?;
+    let mut share = 0u64;
+    for &(_, _, len) in &extents {
+        share = add(share, len, "LVM device share")?;
+    }
     Ok(DeviceMetadata {
         info: LvmDevice {
             major_version,
@@ -426,7 +420,7 @@ fn read_device(partition: &dyn BlockSource) -> Result<DeviceMetadata> {
             scsi_vendor: scsi.text(6, 8)?.trim().to_owned(),
             scsi_model: scsi.text(14, 16)?.trim().to_owned(),
             volume_start: mul(first_unit, PE_SIZE, "LVM device start")?,
-            volume_len: mul(unit_count, PE_SIZE, "LVM device share")?,
+            volume_len: share,
         },
         volume: LvmVolume {
             uuid: vol.uuid(0x54)?,
@@ -438,7 +432,6 @@ fn read_device(partition: &dyn BlockSource) -> Result<DeviceMetadata> {
             device_names,
         },
         first_unit,
-        last_unit,
         extents,
     })
 }

@@ -15,6 +15,11 @@ in what is read and what is refused, and corrected read errors (data that an ear
   OpenVmfs up to 0.4.1 refused such a disk with `Unsupported` ("zero grain (type 2)"), which could happen to any
   VM whose guest discards (TRIM) and whose snapshots are deleted from the middle of a chain. Verified on
   ESXi 7.0.3 and 8.0 U3 against their own consolidation (`fixture-merge-esxi8-v1`).
+- **Read or refused:** a datastore on several devices whose device was later enlarged and grown in place is now
+  read. ESXi appends the new space at the end of the volume, behind the devices that were added before, and
+  OpenVmfs up to 0.4.1 failed to open such a datastore with `Corrupt` ("device 2 starts at extent 15 of the volume,
+  expected 61"). Verified on ESXi 8.0 U3 with three devices (`fixture-span3-esxi8-v1`).
+  `LvmDevice::volume_len` is now the sum of all parts of a device.
 - The second pointer block in `.pb2.sf` is verified on ESXi 7.0.3 as well (`fixture-pb2-v1`, 132,000 small files).
 - Verified on a datastore that ESXi 8.0 U3 extended onto a second device (`fixture-span-esxi8-v1`). No change to
   the library was needed.

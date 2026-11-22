@@ -119,7 +119,13 @@ A datastore can be extended onto further devices ("extents", `vmkfstools -Z`). V
 - every device has its own LVM header, with its own device UUID and the same volume UUID, snapshot id, logical
   size and device count;
 - each device's volume descriptor says which 256 MiB units of the volume it holds (first and last); the first
-  device starts at 0 and each further device continues where the previous one ends;
+  device starts at 0 and each further device starts where the volume ended when it was added;
+- a device can hold **two separate parts** of the volume **[V]**: when a device is enlarged and the datastore
+  grown in place (`vmkfstools --growfs`), the new space is appended at the end of the volume and the device gets
+  a second extent entry. On a three-device datastore whose first device was grown from 4 to 8 GiB, the devices'
+  descriptors say units 0–60, 15–29 and 30–44: the first device holds units 0–14 and 45–60
+  (`fixture-span3-esxi8-v1`). So "first and last" of one device may enclose other devices, and only the extent
+  entries say what lies where;
 - the extent entries of a device carry logical offsets of the whole volume, and physical offsets inside that
   device's partition;
 - the filesystem does not know about devices: a file's blocks can lie on any of them, and `vmkfstools -t0` prints

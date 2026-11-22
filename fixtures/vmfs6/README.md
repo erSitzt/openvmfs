@@ -206,6 +206,20 @@ The same on ESXi 8.0 U3: a datastore created on a 4 GiB device and extended onto
 `truth/` holds ESXi's hashes, block maps, `vmkfstools -D` and `-Ph` output and the extent list. The host's address
 in a heartbeat slot is blanked.
 
+## fixture-span3-esxi8-v1
+
+A datastore that ESXi 8.0 U3 created on a 4 GiB device and extended onto a second and a third (`vmkfstools -Z`),
+with a lazy-zeroed disk created after each step (`pat/l1` to `l3`) and a thin one (`pat/t`). Then the first device
+was enlarged to 8 GiB, its partition resized and the datastore grown in place (`vmkfstools --growfs`), and `pat/l4`
+(4000 MiB) created, most of which lies in the new space.
+
+What it showed: the first device's new space is **appended at the end of the volume**, behind devices two and
+three. The first device then holds two separate parts of the volume (0 to 3.75 GiB and 11.25 to 15.25 GiB).
+OpenVmfs up to 0.4.1 assumed one part per device and failed to open this datastore.
+
+Three whole-device images (0.9 MiB packed). `truth/`: ESXi's hashes, block maps, `vmkfstools -D` and `-Ph` output,
+the extent list. The host's address in a heartbeat slot is blanked.
+
 ## probe-series1
 
 No image, only the record of seven consistency runs (`results.json`), made with
