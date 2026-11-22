@@ -1,13 +1,18 @@
 # OpenVmfs
 
+> [!WARNING]
+> **Experimental.** OpenVmfs was written without a format specification (VMware publishes none) and has been
+> tested in one small lab: two ESXi versions running nested, on virtual disks. It has not yet read a datastore on a
+> real storage array. It never writes to a device, so it cannot damage a datastore, but data it returns may be
+> wrong on layouts nobody has tested. Do not make it your only backup path: keep a second way to read the data,
+> and compare the two from time to time. The tables under [What has been tested](#what-has-been-tested) and
+> [Tests we could not run](#tests-we-could-not-run-reports-welcome) say where the line is today.
+
 Read VMware VMFS6 datastores, and the virtual disks on them, straight from a block device or an image file. No ESXi
 is involved, and nothing is ever written to the device.
 
 OpenVmfs exists for backup and recovery software that wants to read VM disks from storage-array snapshots instead of
 through the hypervisor. It is licensed under Apache-2.0, so it can be embedded in open and closed software alike.
-
-**Status: proof of concept.** It reads real VMFS 6.82 volumes, but only the parts listed under "What works" have
-been verified. Do not rely on it for production backups yet.
 
 ## What works
 
@@ -16,7 +21,7 @@ position is known,
 against the hashes and block maps ESXi itself reports, and file by file against an independent reader.
 
 - Finding the volume: bare VMFS partition or a disk with a GUID partition table.
-- The logical volume manager (LVM 6) with one device.
+- The logical volume manager (LVM 6), with one device or several.
 - Files of every size class: stored inside the descriptor, in sub-blocks, in file blocks, and through one or two
   levels of pointer blocks (tested up to a 42 TiB thin disk).
 - Directories, including names with non-ASCII characters; symbolic links; system files.
@@ -31,6 +36,62 @@ against the hashes and block maps ESXi itself reports, and file by file against 
   (checked against datastores that were filled with junk first, and against ESXi's own hashes and block maps).
   This includes thick disks made of large file blocks (512 MiB), as ESXi creates them on datastores above
   128 GiB.
+
+## What has been tested
+
+Everything in this table is checked by the test suite against data captured from ESXi
+([`fixtures/vmfs6/README.md`](fixtures/vmfs6/README.md)), or was measured in the lab and written down
+([`docs/consistency.md`](docs/consistency.md), [`docs/guide/backup.md`](docs/guide/backup.md)).
+
+| Area | Tested with |
+|---|---|
+| ESXi version | 7.0.3 and 8.0 U3, both formatting VMFS 6.82 |
+| Where ESXi ran | Nested, as a virtual machine; one host per datastore |
+| Devices under the datastore | Virtual disks with 512-byte sectors; images of them, read from files, buffered and unbuffered |
+| Datastore size | 4 GiB to 40 TiB on one device (one to three extents), and one datastore on two devices |
+| Number of files | 100,000 small files on one datastore; sub-block pool grown past 131,072 sub-blocks |
+| Base disks | Thin up to 42 TiB (two levels of pointer blocks); thick lazy-zeroed and eager-zeroed, with small and with large file blocks; thin disks filled by a guest front to back and at random |
+| Who wrote the data | The ESXi shell, `vmkfstools`, and a Linux guest through a paravirtual SCSI controller |
+| Snapshot chains | Up to three SESparse deltas over a base, with guest discards in between; a delta of a million random 4 KiB writes. Compared with ESXi's own consolidation and with QEMU |
+| Datastore in use | Storage snapshot of a running VM after a VM snapshot: correct in 16 of 16 runs. Without a VM snapshot: refused; with journal replay, correct for 10 of 10 images |
+| Reference for "correct" | Hashes and block maps printed by ESXi, self-describing test sectors, and an independent reader (dissect.vmfs) file by file |
+| Where OpenVmfs ran | Linux x64 and Windows x64 (every push runs the Rust tests on both); the C interface and the .NET 10 binding on both as well, the latter on Windows by hand before a release |
+| Raw disks on Windows | Opening `\\.\PhysicalDriveN` and reading it unbuffered works; a datastore has not yet been read that way |
+
+## Tests we could not run: reports welcome
+
+We have one lab. If you have access to something in this table, a run of the read-only command line tool on a
+storage snapshot tells a lot, and takes minutes:
+
+```
+openvmfs info      DEVICE                    # does the datastore open?
+openvmfs ls        DEVICE vm1                # is the directory what ESXi shows?
+openvmfs vmdk info DEVICE vm1/vm1.vmdk       # does the disk open, or why is it refused?
+openvmfs vmdk hash DEVICE vm1/vm1.vmdk       # SHA-256 of the disk
+```
+
+For a powered-off VM without snapshots, the hash must equal `sha256sum vm1-flat.vmdk` on the ESXi shell. Please
+open an issue with the outputs, the ESXi version and build, the storage (model, protocol) and the operating
+system OpenVmfs ran on. A run in which everything matches is as useful to us as a failure. Do not post VM names or
+other data you would not publish; the messages of `openvmfs` contain file names from the datastore.
+
+| Not tested yet | What a report would show |
+|---|---|
+| ESXi 6.7, 7.0 before U3, 8.0 before U3, ESXi 9 | Whether their datastores look the same. VMFS 6.81 is refused today for lack of a sample |
+| Datastores that were upgraded with their hosts over the years | Whether older formatting leaves layouts a fresh datastore does not have |
+| Real storage arrays: Fibre Channel, iSCSI, NVMe over fabrics, any vendor | That an array snapshot presented to another machine reads like the images in our lab |
+| Devices with 4096-byte sectors (4Kn; 512e should behave like 512n) | 4Kn is refused today; `openvmfs info` output of such a datastore is the first step |
+| Datastores shared by a cluster of hosts, with many running VMs | Lock states and journals of several hosts at once; our datastores had one host |
+| Long-lived, fragmented, nearly full datastores | Block maps and resource pools that a lab does not produce in a week |
+| Datastores extended over more than two devices, or grown in place | Extent tables beyond the ones we saw |
+| Windows guests, guests with other virtual controllers (LSI, NVMe, SATA) | Whether they leave anything different in thin disks and deltas |
+| Snapshot chains made by backup products, long chains, deltas after a consolidation | SESparse features we refuse because ESXi never wrote them for us (zero grains) |
+| Disks with changed-block tracking, multi-writer disks, linked clones, Horizon and vSphere Replication disks | Whether they open, and which refusal they hit |
+| Linux multipath devices, Windows with MPIO, arm64 | Opening and unbuffered reading on those device types |
+| The backup order under real load, on real arrays | More runs than our 16, and with shorter or longer gaps between VM snapshot and storage snapshot |
+
+If you can reproduce a layout on a small test datastore, [`docs/internals/lab.md`](docs/internals/lab.md) describes
+how we capture one as a test fixture; that is what turns a refusal into support.
 
 ## What is refused
 

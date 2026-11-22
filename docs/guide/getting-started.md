@@ -108,8 +108,9 @@ For a backup, add `OPENVMFS_DIRECT=1` (or the matching option in the libraries):
 page cache, which is faster for one sequential pass and cannot serve stale blocks of an earlier snapshot that had
 the same device name.
 
-On Windows, image files work and are tested. Raw devices (`\\.\PhysicalDrive3`) are not tested yet, and the tool
-cannot find out their size on its own; the library takes the size from the caller (`FileSource::with_len`).
+On Windows, image files work and are tested. Raw disks (`\\.\PhysicalDrive3`, from an elevated prompt) are opened
+by the command line tool, which asks the driver for their size; reading a datastore that way has not been tested
+yet. The library takes the size from the caller (`FileSource::with_len`).
 
 ## What it will not read
 
