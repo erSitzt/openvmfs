@@ -10,6 +10,8 @@ in what is read and what is refused, and corrected read errors (data that an ear
   `Unsupported` ("pointer block address ... in .pb2.sf other than the first one"). Verified on ESXi 8.0 U3
   (`fixture-pb2-esxi8-v1`). It takes more than 131,072 small files, directories and pointer blocks together to
   get there; a pointer block is needed per 8 GiB of a file larger than 320 MiB.
+- Verified on a datastore that ESXi 8.0 U3 extended onto a second device (`fixture-span-esxi8-v1`). No change to
+  the library was needed.
 
 ## 0.4.1
 

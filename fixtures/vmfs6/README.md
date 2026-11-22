@@ -199,6 +199,13 @@ lazy-zeroed) has blocks on both devices; `d/thin` lies on the second one.
 
 `fixture-span-v1/truth/`: ESXi's hashes, block maps, extent list (`extents.txt`), `voma` result (0 errors).
 
+## fixture-span-esxi8-v1
+
+The same on ESXi 8.0 U3: a datastore created on a 4 GiB device and extended onto a second one. `pat/lazy`
+(4500 MiB, lazy-zeroed) has blocks on both devices, `pat/thin` (1 GiB) on the first. Two whole-device images.
+`truth/` holds ESXi's hashes, block maps, `vmkfstools -D` and `-Ph` output and the extent list. The host's address
+in a heartbeat slot is blanked.
+
 ## probe-series1
 
 No image, only the record of seven consistency runs (`results.json`), made with

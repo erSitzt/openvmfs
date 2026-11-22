@@ -1,0 +1,2 @@
+d90ee20aaf2fc46dc368db52073b6ac0a2a1d5f493de18ef3c8ae60abbd7998a  pat/lazy-flat.vmdk
+5e930539a638847b09d00a59c82f92999b45a71b5fefaa16cfdab91e71a5b8bd  pat/thin-flat.vmdk

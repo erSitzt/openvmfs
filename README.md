@@ -1,11 +1,12 @@
 # OpenVmfs
 
 > [!WARNING]
-> **Experimental.** OpenVmfs was written without a format specification (VMware publishes none) and has been
-> tested in one small lab: two ESXi versions running nested, on virtual disks. It has not yet read a datastore on a
-> real storage array. It never writes to a device, so it cannot damage a datastore, but data it returns may be
-> wrong on layouts nobody has tested. Do not make it your only backup path: keep a second way to read the data,
-> and compare the two from time to time. The tables under [What has been tested](#what-has-been-tested) and
+> **Experimental.** OpenVmfs was written without a format specification (VMware publishes none). It has been
+> tested in one small lab (two ESXi versions running nested, on virtual disks) and, so far, on one production
+> datastore on one storage array ([#1](https://github.com/erSitzt/openvmfs/issues/1)). It never writes to a device,
+> so it cannot damage a datastore, but data it returns may be wrong on layouts nobody has tested. Do not make it
+> your only backup path: keep a second way to read the data, and compare the two from time to time. The tables
+> under [What has been tested](#what-has-been-tested) and
 > [Tests we could not run](#tests-we-could-not-run-reports-welcome) say where the line is today.
 
 Read VMware VMFS6 datastores, and the virtual disks on them, straight from a block device or an image file. No ESXi
@@ -59,14 +60,14 @@ been tested.
 | Snapshot chain of three deltas with guest discards | ✓ | ✓ | `fixture-chain-v2`, `fixture-chain-esxi8-v1` |
 | Snapshot delta of a million random 4 KiB writes | not run | ✓ | measured, same guide |
 | Datastore above 16 TiB | ✓ 17 TiB | ✓ 40 TiB | `fixture-big-v1`, `fixture-big-esxi8-v1` |
-| Datastore on two devices | ✓ | not run | `fixture-span-v1` |
+| Datastore on two devices | ✓ | ✓ | `fixture-span-v1`, `fixture-span-esxi8-v1` |
 | 100,000 small files on one datastore | not run (56,848) | ✓ | `fixture-many-esxi8-v1` |
 | More than 131,072 sub-blocks | not run | ✓ | `fixture-pb2-esxi8-v1` |
 | Disk below a VM snapshot, on a storage snapshot of the running VM | ✓ 9 of 9 | ✓ 7 of 7 | [`docs/consistency.md`](docs/consistency.md) |
 | Disk of a writing VM without a VM snapshot: incomplete on the storage snapshot, so OpenVmfs refuses it | 10 of 10 incomplete | 5 of 5 incomplete | same |
 | The same disk with the journal replayed (experimental) | ✓ 5 of 5 | ✓ 5 of 5 | same, `fixture-journal-v1` |
 
-**Everything else was the same in all tests:**
+**Everything else was the same in all lab tests:**
 
 | Area | Tested with |
 |---|---|
@@ -75,6 +76,12 @@ been tested.
 | Reference for "correct" | Hashes and block maps printed by ESXi, self-describing test sectors, and an independent reader (dissect.vmfs) file by file |
 | Where OpenVmfs ran | Linux x64 and Windows x64 (every push runs the Rust tests on both); the C interface and the .NET 10 binding on Linux on every push, on Windows with `tools/windows-remote-test.py` |
 | Raw disks on Windows | Opening `\\.\PhysicalDriveN` and reading it unbuffered works; a datastore has not yet been read that way |
+
+**Field reports.** Runs outside our lab, by people who use OpenVmfs:
+
+| Report | Setup | Result |
+|---|---|---|
+| [#1](https://github.com/erSitzt/openvmfs/issues/1) | ESXi 7.0.3 (build 24784741), two hosts sharing a 1 TiB datastore with 17 running VMs; read-only array snapshot over iSCSI, 512-byte sectors, presented to Windows Server 2022 with MPIO; OpenVmfs 0.3.0 and 0.4.0 through the .NET binding, the device read by the caller's own code | 5 backup runs of a Linux guest (paravirtual SCSI) and 1 of a Windows guest (LSI Logic SAS), thin disks with changed-block tracking, VM snapshot first: every compared region equal to a read through ESXi, files written in the guests read back with the same SHA-256, nothing refused |
 
 ## Tests we could not run: reports welcome
 
@@ -93,21 +100,21 @@ open an issue with the outputs, the ESXi version and build, the storage (model, 
 system OpenVmfs ran on. A run in which everything matches is as useful to us as a failure. Do not post VM names or
 other data you would not publish; the messages of `openvmfs` contain file names from the datastore.
 
-| Not tested yet | What a report would show |
-|---|---|
-| Any ESXi version other than 7.0.3 and 8.0 U3: 6.7, earlier updates of 7.0 and 8.0, ESXi 9 | A new column in the matrix above. VMFS 6.81 is refused today for lack of a sample |
-| The "not run" cells of the matrix | The same check on the other version |
-| Datastores that were upgraded with their hosts over the years | Whether older formatting leaves layouts a fresh datastore does not have |
-| Real storage arrays: Fibre Channel, iSCSI, NVMe over fabrics, any vendor | That an array snapshot presented to another machine reads like the images in our lab |
-| Devices with 4096-byte sectors (4Kn; 512e should behave like 512n) | 4Kn is refused today; `openvmfs info` output of such a datastore is the first step |
-| Datastores shared by a cluster of hosts, with many running VMs | Lock states and journals of several hosts at once; our datastores had one host |
-| Long-lived, fragmented, nearly full datastores | Block maps and resource pools that a lab does not produce in a week |
-| Datastores extended over more than two devices, or grown in place | Extent tables beyond the ones we saw |
-| Windows guests, guests with other virtual controllers (LSI, NVMe, SATA) | Whether they leave anything different in thin disks and deltas |
-| Snapshot chains made by backup products, long chains, deltas after a consolidation | SESparse features we refuse because ESXi never wrote them for us (zero grains) |
-| Disks with changed-block tracking, multi-writer disks, linked clones, Horizon and vSphere Replication disks | Whether they open, and which refusal they hit |
-| Linux multipath devices, Windows with MPIO, arm64 | Opening and unbuffered reading on those device types |
-| The backup order under real load, on real arrays | More runs than our 16, and with shorter or longer gaps between VM snapshot and storage snapshot |
+| Not tested in our lab | What a report would show | Reports so far |
+|---|---|---|
+| Any ESXi version other than 7.0.3 and 8.0 U3: 6.7, earlier updates of 7.0 and 8.0, ESXi 9 | A new column in the matrix above. VMFS 6.81 is refused today for lack of a sample | Another build of 7.0.3 (#1); no other version |
+| The "not run" cells of the matrix | The same check on the other version | none |
+| Datastores that were upgraded with their hosts over the years | Whether older formatting leaves layouts a fresh datastore does not have | none |
+| Real storage arrays: Fibre Channel, iSCSI, NVMe over fabrics, any vendor | That an array snapshot presented to another machine reads like the images in our lab | One iSCSI array (#1). Fibre Channel, NVMe and other arrays: none |
+| Devices with 4096-byte sectors (4Kn; 512e should behave like 512n) | 4Kn is refused today; `openvmfs info` output of such a datastore is the first step | none |
+| Datastores shared by a cluster of hosts, with many running VMs | Lock states and journals of several hosts at once; our datastores had one host | Two hosts, 17 running VMs (#1) |
+| Long-lived, fragmented, nearly full datastores | Block maps and resource pools that a lab does not produce in a week | none |
+| Datastores extended over more than two devices, or grown in place | Extent tables beyond the ones we saw | none |
+| Windows guests, guests with other virtual controllers (LSI, NVMe, SATA) | Whether they leave anything different in thin disks and deltas | Windows Server 2022 with LSI Logic SAS, one run (#1) |
+| Snapshot chains made by backup products, long chains, deltas after a consolidation | SESparse features we refuse because ESXi never wrote them for us (zero grains) | none |
+| Disks with changed-block tracking, multi-writer disks, linked clones, Horizon and vSphere Replication disks | Whether they open, and which refusal they hit | Changed-block tracking (#1). The others: none |
+| Linux multipath devices, Windows with MPIO, arm64 | Opening and unbuffered reading on those device types | Windows with MPIO, read by the caller's own device code (#1) |
+| The backup order under real load, on real arrays | More runs than our 16, and with shorter or longer gaps between VM snapshot and storage snapshot | 5 runs on one array, all equal (#1) |
 
 If you can reproduce a layout on a small test datastore, [`docs/internals/lab.md`](docs/internals/lab.md) describes
 how we capture one as a test fixture; that is what turns a refusal into support.
