@@ -136,7 +136,14 @@ data range, and one entry per run of each delta.
 | 200 GiB thick, never written | 4 | a few hundred bytes |
 | 4 TiB thin, written in five places | 9 | a few hundred bytes |
 | 64 GiB thin with every other MiB written (the worst case for a base disk) | 32,769 | about 1 MiB |
+| 16 GiB thin, 4 GiB written by a guest front to back while a second disk grew next to it | 9 | a few hundred bytes |
+| 16 GiB thin, 4 GiB written by a guest as 4096 single MiBs in random order | 8,192 | 260 KiB |
 | 64 GiB with a delta of 1,048,576 random 4 KiB writes (one run per write) | 1, and 1,048,576 runs | 57 MiB |
+
+How a thin disk was filled decides this. Two disks that a guest filled at the same time did not end up
+interleaved megabyte by megabyte: ESXi 8.0 U3 gave each of them pieces of 512 MiB. A disk filled by random 1 MiB
+writes had one extent for every megabyte written, with no two of them next to each other on the volume. All three
+maps were identical to the ones ESXi prints (`vmkfstools -t0`).
 
 The worst case is one extent per MiB, so 40 bytes per MiB of disk: about 80 MiB for a 2 TiB disk that is fragmented
 down to single megabytes. A disk that was filled in larger pieces needs a small fraction of that. A volume keeps
