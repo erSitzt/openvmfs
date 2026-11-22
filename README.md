@@ -56,15 +56,15 @@ been tested.
 | Thick disks made of large file blocks (512 MiB) | ✓ | ✓ | `fixture-lfb-v1`, `fixture-big-esxi8-v1` |
 | Disks over 2.5 TiB (two levels of pointer blocks, up to 42 TiB thin) | ✓ | ✓ | `fixture-double-v1`; on 8.0 U3 read once, not kept as a fixture |
 | Disks written by a Linux guest (paravirtual SCSI) | ✓ | ✓ | `fixture-guest-v1`, `fixture-chain-esxi8-v1` |
-| Thin disks filled by a guest front to back and at random | not run | ✓ | measured, [`docs/guide/backup.md`](docs/guide/backup.md) |
+| Thin disks filled by a guest front to back and at random | ✓ | ✓ | measured, [`docs/guide/backup.md`](docs/guide/backup.md): block maps identical to ESXi's |
 | Snapshot chain of three deltas with guest discards | ✓ | ✓ | `fixture-chain-v2`, `fixture-chain-esxi8-v1` |
 | Chain of eleven deltas, snapshots deleted in the middle while the VM ran (deltas merged, zero grains) | ✓ | ✓ | `fixture-merge-esxi8-v1`; on 7.0.3 read once, not kept as a fixture |
 | Disks on LSI Logic SAS, SATA and NVMe controllers, and a disk with changed-block tracking, each with that chain | ✓ | ✓ | measured: 20 reads (7.0.3) and 25 reads (8.0 U3) at four or five levels equal ESXi's consolidation |
-| Snapshot delta of a million random 4 KiB writes | not run | ✓ | measured, same guide |
+| Snapshot delta of a million random 4 KiB writes | ✓ | ✓ | measured, same guide: SHA-256 equal to ESXi's consolidation |
 | Datastore above 16 TiB | ✓ 17 TiB | ✓ 40 TiB | `fixture-big-v1`, `fixture-big-esxi8-v1` |
 | Datastore on two devices | ✓ | ✓ | `fixture-span-v1`, `fixture-span-esxi8-v1` |
-| 100,000 small files on one datastore | not run (56,848) | ✓ | `fixture-many-esxi8-v1` |
-| More than 131,072 sub-blocks | not run | ✓ | `fixture-pb2-esxi8-v1` |
+| More than 100,000 small files on one datastore | ✓ 132,000 | ✓ 100,697 | `fixture-pb2-v1`, `fixture-many-esxi8-v1`, `fixture-pb2-esxi8-v1` |
+| More than 131,072 sub-blocks | ✓ | ✓ | `fixture-pb2-v1`, `fixture-pb2-esxi8-v1` |
 | Disk below a VM snapshot, on a storage snapshot of the running VM | ✓ 9 of 9 | ✓ 7 of 7 | [`docs/consistency.md`](docs/consistency.md) |
 | Disk of a writing VM without a VM snapshot: incomplete on the storage snapshot, so OpenVmfs refuses it | 10 of 10 incomplete | 5 of 5 incomplete | same |
 | The same disk with the journal replayed (experimental) | ✓ 5 of 5 | ✓ 5 of 5 | same, `fixture-journal-v1` |
@@ -105,7 +105,6 @@ other data you would not publish; the messages of `openvmfs` contain file names 
 | Not tested in our lab | What a report would show | Reports so far |
 |---|---|---|
 | Any ESXi version other than 7.0.3 and 8.0 U3: 6.7, earlier updates of 7.0 and 8.0, ESXi 9 | A new column in the matrix above. VMFS 6.81 is refused today for lack of a sample | Another build of 7.0.3 (#1); no other version |
-| The "not run" cells of the matrix | The same check on the other version | none |
 | Datastores that were upgraded with their hosts over the years | Whether older formatting leaves layouts a fresh datastore does not have | none |
 | Real storage arrays: Fibre Channel, iSCSI, NVMe over fabrics, any vendor | That an array snapshot presented to another machine reads like the images in our lab | One iSCSI array (#1). Fibre Channel, NVMe and other arrays: none |
 | Devices with 4096-byte sectors (4Kn; 512e should behave like 512n) | 4Kn is refused today; `openvmfs info` output of such a datastore is the first step | none |

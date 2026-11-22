@@ -143,7 +143,8 @@ data range, and one entry per run of each delta.
 How a thin disk was filled decides this. Two disks that a guest filled at the same time did not end up
 interleaved megabyte by megabyte: ESXi 8.0 U3 gave each of them pieces of 512 MiB. A disk filled by random 1 MiB
 writes had one extent for every megabyte written, with no two of them next to each other on the volume. All three
-maps were identical to the ones ESXi prints (`vmkfstools -t0`).
+maps were identical to the ones ESXi prints (`vmkfstools -t0`). ESXi 7.0.3 did the same: pieces of 512 MiB for
+two disks filled side by side, single megabytes for random writes, maps identical.
 
 The worst case is one extent per MiB, so 40 bytes per MiB of disk: about 80 MiB for a 2 TiB disk that is fragmented
 down to single megabytes. A disk that was filled in larger pieces needs a small fraction of that. A volume keeps

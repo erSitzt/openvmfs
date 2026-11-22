@@ -285,6 +285,19 @@ them were also hashed on ESXi.
 Two earlier runs on 16 GiB datastores filled them before reaching cluster 256 and are not kept: 56,848 files on ESXi
 7.0.3 and 41,775 on ESXi 8.0 U3, all read as written.
 
+## fixture-pb2-v1
+
+The same on ESXi 7.0.3, on a fresh 256 GiB datastore: `recipes/make_pb2.py` from round 0 to 131,840 sub-blocks in
+449 rounds and 70 minutes, about 132,000 files of 8 KiB (`truth/esxi.txt`). ESXi 7.0.3 enlarged the pool from
+16,384 to 32,000 sub-blocks in one step and by 512 from then on; the descriptor pool went from 16,384 to 134,096.
+`.sbc.sf` has the same length and the same second pointer block as on ESXi 8.0 U3. Partial image (38 MiB of the
+device, 0.1 MiB packed): three directories and nine files, eight of 8 KiB and `r447/big`, all with ESXi's hashes.
+
+The datastore also held the two guest tests that the README lists as measured for ESXi 7.0.3: a 24 GiB disk with a
+delta of 1,048,576 random 4 KiB writes (818,488 runs; SHA-256 equal to ESXi's consolidation; opened with 51 reads)
+and three 16 GiB thin disks filled by a guest, two front to back at the same time (pieces of 512 MiB) and one in
+random megabytes (3,451 extents), with block maps identical to `vmkfstools -t0`.
+
 ## fixture-merge-esxi8-v1
 
 Five 2 GiB thin disks of one VM on ESXi 8.0 U3, one each on a paravirtual SCSI controller (`pv`, and `cbt` with

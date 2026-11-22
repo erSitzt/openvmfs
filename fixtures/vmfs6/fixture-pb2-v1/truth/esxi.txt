@@ -1,0 +1,26 @@
+Files (max/free): 134096/2044
+Ptr Blocks (max/free): 0/0
+Sub Blocks (max/free): 131840/2
+Secondary Ptr Blocks (max/free): 256/254
+File Blocks (overcommit/used/overcommit %): 0/45490/0
+Ptr Blocks  (overcommit/used/overcommit %): 0/0/0
+Sub Blocks  (overcommit/used/overcommit %): 0/131838/0
+Large File Blocks (total/used/file block clusters): 512/8/256
+len 8644591616, nb 8245 tbz 0, cow 0, newSinceEpoch 8245, zla 5, bs 1048576
+lastSFBClusterNum 440, numPreAllocBlocks 0, numPointerBlocks 2
+2e21606aa82d32a15bf1271db28e388470d72d2a2723f7becb9a0da8bcd4979b  pb2/r000/f000
+ddf8ee5e21c69b5649c03ae5c2916ab03e1b418c318ab2ae5536de56d186d599  pb2/r030/f100
+c67200849f86b855ca5f35f44ac95f37add80021a92eabb8c4d69e861e73bb88  pb2/r445/f000
+5ac8983bd99e397aeb13e3052d60c12ee61106f6238ab89b66c1929e370b8d2e  pb2/r445/f400
+5de4ca4e461c12a9c879a38cb967cb929f81bd34e60629d2849a203a6c16863b  pb2/r447/f000
+b9afed5ce4f7b40faf0f91a4ce41914caa827023a7f22f220f12c0b5f4381a50  pb2/r447/f250
+ad7a9d4a3bc9e23bd37bda1387ab57461428d4ea9a9abbd14f062a298735bb5e  pb2/r447/f506
+1e8a25fe638a8276aa5b9bf078ab370add33f9ad19490e2c13ecae3e7fe9f777  pb2/r448/f001
+2a42bf35994179810caff96f4bb6fb207af3104669274c85c19ba3d3ed4abe6d  pb2/r447/big
+pb2/r000 600
+pb2/r445 508
+pb2/r447 508
+pb2/r448 2
+pb2 449
+Addr <4, 514, 208>, gen 209, links 1, type reg, flags 0x1, uid 0, gid 0, mode 644
+len 8192, nb 1 tbz 0, cow 0, newSinceEpoch 1, zla 2, bs 65536

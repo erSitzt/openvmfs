@@ -41,6 +41,7 @@ Fixtures are unpacked on first use into `target/fixture-cache` (about 6 GiB, spa
 | `sample_images` | The public sample images: listing, small files, disks, and a comparison of block maps |
 | `fixture_zero`, `fixture_lfb`, `fixture_guest` | Base disks: thin, lazy-zeroed, eager-zeroed, large file blocks, disks written by a guest |
 | `fixture_chain`, `fixture_chain2` | Snapshot chains of one to three levels, with guest discards, against ESXi's consolidation |
+| `fixture_many_esxi8`, `fixture_pb2`, `fixture_pb2_esxi8` | Datastores with more than 100,000 small files and a sub-block pool past 131,072 sub-blocks |
 | `fixture_merge_esxi8` | A chain of eleven deltas after snapshots were deleted: zero grains |
 | `fixture_big`, `fixture_span`, `fixture_span_esxi8` | A 17 TiB datastore; a datastore on two devices (ESXi 7.0.3 and 8.0 U3) |
 | `fixture_inuse`, `fixture_journal` | Images of a datastore in use: lock detection, journal replay |

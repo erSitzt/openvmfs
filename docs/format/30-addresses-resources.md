@@ -44,7 +44,7 @@ addresses of type 3: for those the implementations disagree or no sample exists.
 
 The resource number of a PB2 address is **[V]**: when `.sbc.sf` grew past 8 GiB, ESXi 8.0 U3 gave it a second
 pointer block with the address `0x0100000000000005` (cluster 0, resource 1), and files stored behind that mark read
-as on ESXi (`fixture-pb2-esxi8-v1`). The first cluster of `.pb2.sf` holds 32 pointer blocks, enough for a 256 GiB
+as on ESXi (`fixture-pb2-esxi8-v1`; ESXi 7.0.3 does the same, `fixture-pb2-v1`). The first cluster of `.pb2.sf` holds 32 pointer blocks, enough for a 256 GiB
 `.sbc.sf` (4 million sub-blocks).
 
 Sub-block clusters above 255 are **[V]**: on a datastore with 100,697 small files ESXi 8.0 U3 used clusters 0 to 260,
