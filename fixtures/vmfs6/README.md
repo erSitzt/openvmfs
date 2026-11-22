@@ -220,6 +220,22 @@ OpenVmfs up to 0.4.1 assumed one part per device and failed to open this datasto
 Three whole-device images (0.9 MiB packed). `truth/`: ESXi's hashes, block maps, `vmkfstools -D` and `-Ph` output,
 the extent list. The host's address in a heartbeat slot is blanked.
 
+## fixture-grow-esxi8-v1
+
+The single-device case: a datastore on a 4 GiB device, the device enlarged to 8 GiB, the partition resized and the
+datastore grown (`vmkfstools --growfs`), ESXi 8.0 U3. `pat/l1` (2000 MiB, lazy-zeroed) was created before the
+growth, `pat/l2` (3500 MiB) and `pat/t` (1 GiB thin) after it; `l2` lies in the new space. One whole-device image
+(0.4 MiB packed), `truth/` as above. OpenVmfs 0.4.1 read this one correctly already.
+
+Also measured on the 256 GiB datastore of this host, without a fixture:
+
+- A chain of **31 deltas**, the deepest ESXi allows (the 32nd snapshot fails with "Snapshot hierarchy is too
+  deep"), with a guest write and a discard before each snapshot: top and middle level have the SHA-256 of ESXi's
+  consolidation. Opening the top takes 989 reads.
+- A disk attached with **multi-writer sharing**: read with ESXi's hash while the VM is off. While the VM runs its
+  lock is mode 3 with a zero owner and the host in a list behind it (`docs/format/40-file-descriptor.md`), and
+  OpenVmfs refuses the disk as in use.
+
 ## probe-series1
 
 No image, only the record of seven consistency runs (`results.json`), made with

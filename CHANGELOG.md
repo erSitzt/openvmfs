@@ -20,6 +20,8 @@ in what is read and what is refused, and corrected read errors (data that an ear
   OpenVmfs up to 0.4.1 failed to open such a datastore with `Corrupt` ("device 2 starts at extent 15 of the volume,
   expected 61"). Verified on ESXi 8.0 U3 with three devices (`fixture-span3-esxi8-v1`).
   `LvmDevice::volume_len` is now the sum of all parts of a device.
+- Verified without a change: a single-device datastore grown in place (`fixture-grow-esxi8-v1`), a chain of 31
+  deltas, and a multi-writer disk (refused as in use while a VM has it open).
 - The second pointer block in `.pb2.sf` is verified on ESXi 7.0.3 as well (`fixture-pb2-v1`, 132,000 small files).
 - Verified on a datastore that ESXi 8.0 U3 extended onto a second device (`fixture-span-esxi8-v1`). No change to
   the library was needed.

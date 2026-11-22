@@ -11,9 +11,12 @@ holds resident data and the address array.
 | 0x04 | 8 | volume offset of this descriptor | **[V]** |
 | 0x0C | 8 | volume offset of the owner's heartbeat slot | **[1]** |
 | 0x14 | 8 | heartbeat generation | **[1]** |
-| 0x24 | 4 | lock mode: 0 free, 1 exclusive, 2 read-only, 3 multi-writer | 0, 1 and 2 **[V]**, see below |
+| 0x24 | 4 | lock mode: 0 free, 1 exclusive, 2 read-only, 3 multi-writer | **[V]**, see below |
 | 0x28 | 16 | owner UUID | **[1]** |
 | 0x38 | 8 | modification time of the lock | **[1]** |
+| 0x40 | 4 | number of multi-writer owners | 1 **[V]** (mode 3 only) |
+| 0x44 | 8 | volume offset of the first owner's heartbeat slot | **[V]** |
+| 0x54 | 16 | UUID of the first owner | **[V]** |
 
 An unused descriptor slot is all zeros **[V]**. OpenVmfs checks the lock type and that the recorded position equals
 the position the descriptor was read from.
@@ -25,6 +28,7 @@ The lock mode says how hosts had the file open when an image of the datastore wa
 | Closed files, disks of a powered-off VM | 0 free | zeros |
 | Current disk of a running VM: its flat file, or its newest delta | 1 exclusive | UUID of the host |
 | Disk below a VM snapshot of a running VM | 2 read-only | zeros |
+| Disk attached with multi-writer sharing, of a running VM | 3 multi-writer | zeros; the hosts are listed from 0x40 |
 
 Seen the same way on ESXi 7.0.3 and ESXi 8.0 U3.
 
