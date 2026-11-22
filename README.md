@@ -55,7 +55,7 @@ Everything in this table is checked by the test suite against data captured from
 | Snapshot chains | Up to three SESparse deltas over a base, with guest discards in between; a delta of a million random 4 KiB writes. Compared with ESXi's own consolidation and with QEMU |
 | Datastore in use | Storage snapshot of a running VM after a VM snapshot: correct in 16 of 16 runs. Without a VM snapshot: refused; with journal replay, correct for 10 of 10 images |
 | Reference for "correct" | Hashes and block maps printed by ESXi, self-describing test sectors, and an independent reader (dissect.vmfs) file by file |
-| Where OpenVmfs ran | Linux x64 and Windows x64 (every push runs the Rust tests on both); the C interface and the .NET 10 binding on both as well, the latter on Windows by hand before a release |
+| Where OpenVmfs ran | Linux x64 and Windows x64 (every push runs the Rust tests on both); the C interface and the .NET 10 binding on Linux on every push, on Windows with `tools/windows-remote-test.py` |
 | Raw disks on Windows | Opening `\\.\PhysicalDriveN` and reading it unbuffered works; a datastore has not yet been read that way |
 
 ## Tests we could not run: reports welcome
