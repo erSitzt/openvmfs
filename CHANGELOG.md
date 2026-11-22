@@ -3,6 +3,14 @@
 Each release lists what a program that embeds OpenVmfs has to know: changes to the API or the C interface, changes
 in what is read and what is refused, and corrected read errors (data that an earlier version returned wrongly).
 
+## Not released yet
+
+- **Read or refused:** a datastore whose sub-block pool has grown past 131,072 sub-blocks is now read. ESXi then
+  stores a second pointer block for its sub-block file, and OpenVmfs up to 0.4.1 refused the whole datastore with
+  `Unsupported` ("pointer block address ... in .pb2.sf other than the first one"). Verified on ESXi 8.0 U3
+  (`fixture-pb2-esxi8-v1`). It takes more than 131,072 small files, directories and pointer blocks together to
+  get there; a pointer block is needed per 8 GiB of a file larger than 320 MiB.
+
 ## 0.4.1
 
 - **API and C interface:** unchanged (interface version 5).

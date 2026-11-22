@@ -1,0 +1,51 @@
+VMware ESXi 8.0.3 build-24022510
+VMware ESXi 8.0 Update 3
+VMFS-6.82 (Raw Major Version: 24) file system spanning 1 partitions.
+Files (max/free): 166336/504
+Ptr Blocks (max/free): 0/0
+Sub Blocks (max/free): 131840/2
+Secondary Ptr Blocks (max/free): 256/254
+== .sbc.sf
+Addr <4, 0, 4>, gen 1, links 1, type sys, flags 0x8, uid 0, gid 0, mode 400
+len 8644591616, nb 8245 tbz 0, cow 0, newSinceEpoch 8245, zla 5, bs 1048576
+lastSFBClusterNum 81, numPreAllocBlocks 0, numPointerBlocks 2
+== .pb2.sf
+Addr <4, 0, 6>, gen 1, links 1, type sys, flags 0, uid 0, gid 0, mode 400
+len 16908288, nb 17 tbz 0, cow 0, newSinceEpoch 17, zla 1, bs 1048576
+lastSFBClusterNum 0, numPreAllocBlocks 0, numPointerBlocks 0
+== pb2/r000/f000
+Addr <4, 393, 205>, gen 258, links 1, type reg, flags 0x1, uid 0, gid 0, mode 644
+len 8192, nb 1 tbz 0, cow 0, newSinceEpoch 1, zla 2, bs 65536
+lastSFBClusterNum 0, numPreAllocBlocks 0, numPointerBlocks 0
+== pb2/r249/f000
+Addr <4, 643, 198>, gen 199, links 1, type reg, flags 0x1, uid 0, gid 0, mode 644
+len 8192, nb 1 tbz 0, cow 0, newSinceEpoch 1, zla 2, bs 65536
+lastSFBClusterNum 0, numPreAllocBlocks 0, numPointerBlocks 0
+== pb2/r250/f000
+Addr <4, 643, 202>, gen 203, links 1, type reg, flags 0x1, uid 0, gid 0, mode 644
+len 8192, nb 1 tbz 0, cow 0, newSinceEpoch 1, zla 2, bs 65536
+lastSFBClusterNum 0, numPreAllocBlocks 0, numPointerBlocks 0
+== pb2/r250/f506
+Addr <4, 645, 196>, gen 197, links 1, type reg, flags 0x1, uid 0, gid 0, mode 644
+len 8192, nb 1 tbz 0, cow 0, newSinceEpoch 1, zla 2, bs 65536
+lastSFBClusterNum 0, numPreAllocBlocks 0, numPointerBlocks 0
+== pb2/r252/f000
+Addr <4, 645, 202>, gen 203, links 1, type reg, flags 0x1, uid 0, gid 0, mode 644
+len 8192, nb 1 tbz 0, cow 0, newSinceEpoch 1, zla 2, bs 65536
+lastSFBClusterNum 0, numPreAllocBlocks 0, numPointerBlocks 0
+== pb2/r252/f506
+Addr <4, 647, 196>, gen 197, links 1, type reg, flags 0x1, uid 0, gid 0, mode 644
+len 8192, nb 1 tbz 0, cow 0, newSinceEpoch 1, zla 2, bs 65536
+lastSFBClusterNum 0, numPreAllocBlocks 0, numPointerBlocks 0
+== pb2/r252/big
+Addr <4, 645, 201>, gen 202, links 1, type reg, flags 0x9, uid 0, gid 0, mode 644
+len 419430400, nb 1 tbz 0, cow 0, newSinceEpoch 1, zla 3, bs 1048576
+lastSFBClusterNum 22, numPreAllocBlocks 0, numPointerBlocks 1
+a638749185c3337d2b0ba70ae4efe392e72e6a57104b5528a755115327540048  pb2/r252/big
+9d9feed07a53f8762dda011f733cfc69d0f8443b76f0856bbf39cf06f5e281d6  pb2/r252/f000
+698a6c397d1322aa05fe591a2f91509436986a947f170a42f7a40a52bbfdf473  pb2/r252/f506
+fbd2e8a716c2bd1f5f1d9803c4961d39f7def72e17777f0a8da9bc9cbe9005bf  pb2/r250/f000
+254
+508
+unmount 0
+51539607552

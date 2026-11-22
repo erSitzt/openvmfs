@@ -276,11 +276,12 @@ impl AddressSpace for Resolver<'_> {
                 }
                 (SystemFile::PointerBlocks, cluster, resource)
             }
-            // The other implementations read these addresses differently; they agree only on the first one.
+            // The other implementations read these addresses differently. The resource number in bits 56 to 63 is
+            // verified (`fixture-pb2-esxi8-v1`); a cluster other than the first was never seen.
             Addr::PointerBlock2 { cluster, resource } => {
-                if (cluster, resource) != (0, 0) && !self.geo.accept_unverified {
+                if cluster != 0 && !self.geo.accept_unverified {
                     return Err(Error::unsupported(format!(
-                        "pointer block address {raw:#018x} in .pb2.sf other than the first one; its layout has not \
+                        "pointer block address {raw:#018x} in .pb2.sf outside its first cluster; its layout has not \
                          been verified"
                     ))
                     .into());

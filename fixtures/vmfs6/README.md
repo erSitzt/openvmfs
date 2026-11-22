@@ -259,5 +259,21 @@ Every file holds a hash of its own number, so no list of hashes is needed. On th
 as written. Partial image (39 MiB of the device, 0.1 MiB packed): the two directories and seven files the tests read,
 among them `d098/f0255` and `d098/f0256`, the first sub-blocks of clusters 255 and 256.
 
+## fixture-pb2-esxi8-v1
+
+The same datastore later, after `recipes/make_pb2.py` made ESXi grow the sub-block pool from 67,328 to 131,840
+sub-blocks (`truth/esxi.txt`). What it showed:
+
+- ESXi enlarges the pool only for something that must have a sub-block: a pointer block or a directory. Each time
+  it added 512 sub-blocks. The recipe alternates one sparse file that needs a pointer block with about 500 small
+  files that use the new sub-blocks up; 254 rounds took 40 minutes.
+- At 131,072 sub-blocks `.sbc.sf` passes 8 GiB, which is all one pointer block covers, and gets a second one in
+  `.pb2.sf` (`numPointerBlocks 2`, "Secondary Ptr Blocks" 256/254). Its address is cluster 0, resource 1.
+- `.pbc.sf` stayed empty throughout.
+
+OpenVmfs up to 0.4.1 refused that second address, and with it the whole datastore. Partial image (62 MiB of the
+device, 0.1 MiB packed): three directories and the files the tests read, on both sides of the 8 GiB mark; four of
+them were also hashed on ESXi.
+
 Two earlier runs on 16 GiB datastores filled them before reaching cluster 256 and are not kept: 56,848 files on ESXi
 7.0.3 and 41,775 on ESXi 8.0 U3, all read as written.

@@ -39,8 +39,13 @@ Bit 0 is the least significant bit; ranges are inclusive.
 
 Bit 5 is read as copy-on-write by one implementation family and as the VMFS5 form of "to be zeroed" by the
 other; it was never seen set on VMFS6. All other bits have no known meaning. OpenVmfs refuses an address in which one of them is set, any address
-with bit 5, addresses in `.pb2.sf` other than the first, and pointer block
+with bit 5, addresses in `.pb2.sf` outside its first cluster, and pointer block
 addresses of type 3: for those the implementations disagree or no sample exists.
+
+The resource number of a PB2 address is **[V]**: when `.sbc.sf` grew past 8 GiB, ESXi 8.0 U3 gave it a second
+pointer block with the address `0x0100000000000005` (cluster 0, resource 1), and files stored behind that mark read
+as on ESXi (`fixture-pb2-esxi8-v1`). The first cluster of `.pb2.sf` holds 32 pointer blocks, enough for a 256 GiB
+`.sbc.sf` (4 million sub-blocks).
 
 Sub-block clusters above 255 are **[V]**: on a datastore with 100,697 small files ESXi 8.0 U3 used clusters 0 to 260,
 and the cluster number continues in bits 6–41 (cluster 256 is address `0x4002`). See `fixture-many-esxi8-v1`.
@@ -121,7 +126,9 @@ Seen on VMFS 6.82 **[V]**:
 
 The first cluster group is at 0x10000 in every file. Notes:
 
-- `.pbc.sf` is **empty**: VMFS6 stores pointer blocks as sub-blocks, or in `.pb2.sf`.
+- `.pbc.sf` is **empty**: VMFS6 stores pointer blocks as sub-blocks, or in `.pb2.sf`. It stayed empty even when a
+  file needed a pointer block while no sub-block was free: ESXi 8.0 U3 then enlarged the sub-block pool by 512
+  sub-blocks **[V]**. A small file in the same situation gets a 1 MiB file block and the pool does not grow.
 - `.sbc.sf` is a sparse file of about 1 GiB; `.pb2.sf` is 17 MiB and addressed directly.
 - `.fbb.sf` counts 4 large file blocks and 2048 small ones on a 2 GiB volume. The small-block header is the "child"
   of the large-block header and carries flag 0x2.
