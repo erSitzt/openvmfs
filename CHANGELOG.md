@@ -7,6 +7,10 @@ in what is read and what is refused, and corrected read errors (data that an ear
 
 - Verified on a 40 TiB datastore made by ESXi 8.0 U3 (`fixture-big-esxi8-v1`): disks behind the first and the
   second 16 TiB boundary read as on ESXi. No change to the library was needed.
+- Opening a disk whose snapshot delta was written in random order needs far fewer reads: the grain tables are
+  fetched in the order of the file, up to 4 MiB at a time, whatever order the directory names them in. A 64 GiB
+  disk with a million random 4 KiB writes took 4134 reads before and takes 73 now. The data read is the same,
+  and the disk has the SHA-256 of ESXi's own consolidation.
 
 ## 0.4.0
 

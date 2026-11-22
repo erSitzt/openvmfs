@@ -32,7 +32,10 @@ At byte 0, 512 bytes, all fields 64-bit; offsets and sizes are in sectors.
 | 192, 200 | grains offset, size | 12288 (6 MiB), the disk size |
 | 208 | padding | zero |
 
-An empty delta is a 6 MiB file: metadata only.
+An empty delta is a 6 MiB file: metadata only. These sizes are from deltas of small disks (up to 1 GiB). The table
+area, the back map and the free bitmap grow with the disk: the delta of a 64 GiB disk had 128 MiB of grain tables
+(room for all 4096), a 2 MiB free bitmap and a 128 MiB back map, with the grains starting at 261 MiB **[V]**
+(ESXi 8.0 U3). Much of that is not allocated on the datastore until it is used.
 
 ## Volatile header
 
@@ -57,6 +60,12 @@ with the magic 0xDEAFC0DE **[V]**; the journal itself has not been analysed.
 - A directory entry is 0 (no table) or `0x10000000` in its upper half and a table index in its lower half **[V]**.
   Table `i` is at `grain tables offset + i × 64` sectors.
 - A table has 4096 entries and covers 16 MiB of the disk.
+- Table indices are handed out in the order in which a guest first writes to each 16 MiB of the disk **[V]**:
+  after random writes over a whole 64 GiB disk the directory named the 4096 tables in no order at all. In the
+  file they still lie next to each other, so OpenVmfs reads the tables in the order of the file, up to 4 MiB per
+  read, and sorts the result by disk offset.
+  That disk (1,048,576 random 4 KiB writes, one run each) read with the same SHA-256 as ESXi's own
+  consolidation of it. Its image is not in the repository: the tables alone are 128 MiB.
 - A table entry carries its type in the top four bits:
 
 | Type | Meaning | How it reads |

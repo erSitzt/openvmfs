@@ -124,7 +124,7 @@ is one request to the device; when the device is behind a network, multiply by i
 |---|---|---|---|
 | Open a volume | 23 or 24 | 4.2 MiB | Nearly the same from 4 GiB to 40 TiB: one more read for each extent of the volume (every 16 TiB). One read is 4 MiB, the rest are small |
 | Open a base disk | about 15, plus one per 8 GiB of disk size | 64 KiB per 8 GiB | 200 GiB thick: 42 reads, 1.7 MiB; 4100 GiB thick: 533 reads, 33 MiB. 4 TiB thin: 23 reads, because unallocated parts have no pointer blocks |
-| Each snapshot delta in the chain | about 25, plus its grain tables | 32 KiB per 16 MiB of disk the delta has touched | Tables that lie next to each other are fetched in one read of up to 4 MiB |
+| Each snapshot delta in the chain | about 25, plus one per 4 MiB of grain tables | 32 KiB per 16 MiB of disk the delta has touched | A 64 GiB disk with a million random 4 KiB writes all over it: 73 reads, 128 MiB. That is the most a delta of this size needs |
 
 All reads of one open happen one after the other.
 
@@ -136,14 +136,20 @@ data range, and one entry per run of each delta.
 | 200 GiB thick, never written | 4 | a few hundred bytes |
 | 4 TiB thin, written in five places | 9 | a few hundred bytes |
 | 64 GiB thin with every other MiB written (the worst case for a base disk) | 32,769 | about 1 MiB |
+| 64 GiB with a delta of 1,048,576 random 4 KiB writes (one run per write) | 1, and 1,048,576 runs | 57 MiB |
 
 The worst case is one extent per MiB, so 40 bytes per MiB of disk: about 80 MiB for a 2 TiB disk that is fragmented
 down to single megabytes. A disk that was filled in larger pieces needs a small fraction of that. A volume keeps
 about 1.5 MiB.
 
+A delta costs about 56 bytes for each run, a run being a piece of the disk that lies in one piece in the delta.
+Sequential writes give few runs; random 4 KiB writes give one run each, so a delta that holds 4 GiB of them needs
+57 MiB, and one that holds 100 GiB of them would need about 1.4 GiB. Opening that delta took 0.16 seconds on a
+local image, most of it for reading the tables.
+
 `map` works on these tables and reads nothing from the device: 0.1 to 0.3 microseconds for a 4 MiB section of a
-base disk, on one core of a desktop CPU. We have no measurement for a delta fragmented down to 4 KiB; the lookup is
-a binary search over the delta's runs, followed by one step per run in the section.
+base disk, on one core of a desktop CPU. On the delta with a million random writes it took 3.6 microseconds per
+4 MiB section, which had 129 ranges on average and 135 at most.
 
 We have not measured throughput: it is the device's. A read of disk data is one lookup in memory and one read from
 the device.

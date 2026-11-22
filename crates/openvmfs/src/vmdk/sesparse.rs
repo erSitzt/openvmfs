@@ -152,10 +152,8 @@ impl SeSparse {
             .map(|raw_entry| u64::from_le_bytes(raw_entry.try_into().unwrap_or([0; 8])))
             .collect();
         drop(raw_directory);
-        // Tables that follow each other in the file are read in one piece: `(index of the first, bytes)`.
-        let mut batch: (u64, Vec<u8>) = (0, Vec::new());
-
-        let mut runs: Vec<Run> = Vec::new();
+        // Which tables the disk uses, as `(index in the table area, number in the directory)`.
+        let mut wanted: Vec<(u64, u64)> = Vec::new();
         for (table_number, &entry) in directory.iter().enumerate() {
             if entry == 0 {
                 continue;
@@ -167,66 +165,85 @@ impl SeSparse {
                 )));
             }
             let table_index = entry & 0xFFFF_FFFF;
-            let table_offset = add(
-                tables_offset,
-                mul(table_index, table_bytes, "grain table offset")?,
-                "grain table offset",
+            let table_end = mul(
+                add(table_index, 1, "grain table index")?,
+                table_bytes,
+                "grain table end",
             )?;
-            if add(table_offset, table_bytes, "grain table end")? > add(tables_offset, tables_size, "grain tables end")?
-            {
+            if table_end > tables_size {
                 return Err(Error::corrupt(format!(
                     "SESparse grain directory entry {table_number} points to table {table_index}, outside the table area"
                 )));
             }
-            let in_batch = table_index
-                .checked_sub(batch.0)
-                .filter(|&position| position < batch.1.len() as u64 / table_bytes);
-            let position = match in_batch {
-                Some(position) => position,
-                None => {
-                    // ESXi hands out tables in the order it needs them, so the next directory entries usually
-                    // name the next tables. Each read costs a round trip to the device; fetch them together.
-                    let mut tables = 1u64;
-                    for &next in directory.iter().skip(table_number.saturating_add(1)) {
-                        let wanted = table_index.saturating_add(tables);
-                        let fits = wanted.saturating_add(1).saturating_mul(table_bytes) <= tables_size;
-                        if tables == TABLES_PER_READ || next != (DIRECTORY_ENTRY_TAG << 32 | wanted) || !fits {
-                            break;
-                        }
-                        tables = tables.saturating_add(1);
+            wanted.push((table_index, table_number as u64));
+        }
+        drop(directory);
+        // ESXi hands out tables in the order a guest first touches their part of the disk, so the directory names
+        // them in any order. Each read costs a round trip to the device: walk the tables in the order of the file
+        // and fetch neighbours together.
+        wanted.sort_unstable();
+
+        let fit = |value: u64| {
+            usize::try_from(value).map_err(|_| Error::corrupt("SESparse grain table position does not fit"))
+        };
+        let table_len = fit(table_bytes)?;
+        let mut runs: Vec<Run> = Vec::new();
+        let mut rest = wanted.as_slice();
+        while let Some(&(first_index, _)) = rest.first() {
+            let mut tables = 1usize;
+            while (tables as u64) < TABLES_PER_READ
+                && rest.get(tables).map(|next| next.0) == first_index.checked_add(tables as u64)
+            {
+                tables = tables.saturating_add(1);
+            }
+            let (batch, later) = rest.split_at(tables);
+            rest = later;
+            let raw = read_vec(
+                &*source,
+                add(
+                    tables_offset,
+                    mul(first_index, table_bytes, "grain table offset")?,
+                    "grain table offset",
+                )?,
+                mul(tables as u64, table_bytes, "grain table length")?,
+                "SESparse grain table",
+            )?;
+            for (raw_table, &(table_index, table_number)) in raw.chunks_exact(table_len).zip(batch) {
+                // Runs grow only inside one table here; tables are joined below, once they are in disk order.
+                let first_run = runs.len();
+                let first_grain = mul(table_number, ENTRIES_PER_TABLE, "grain number")?;
+                for (slot, raw_grain) in raw_table.chunks_exact(8).enumerate() {
+                    let grain_entry = u64::from_le_bytes(raw_grain.try_into().unwrap_or([0; 8]));
+                    if grain_entry == 0 {
+                        continue;
                     }
-                    let bytes = mul(tables, table_bytes, "grain table length")?;
-                    batch = (
-                        table_index,
-                        read_vec(&*source, table_offset, bytes, "SESparse grain table")?,
-                    );
-                    0
+                    let grain = add(first_grain, slot as u64, "grain number")?;
+                    if grain >= total_grains {
+                        return Err(Error::corrupt(format!(
+                            "SESparse grain table {table_index} has an entry for grain {grain}, beyond the disk"
+                        )));
+                    }
+                    let kind = decode_grain(grain_entry, grains_offset, source.len(), accept_unverified)?;
+                    push_run(
+                        &mut runs,
+                        first_run,
+                        mul(grain, GRAIN_SIZE, "grain offset")?,
+                        capacity,
+                        kind,
+                    )?;
                 }
-            };
-            let fit = |value: u64| {
-                usize::try_from(value).map_err(|_| Error::corrupt("SESparse grain table position does not fit"))
-            };
-            let start = fit(mul(position, table_bytes, "grain table position")?)?;
-            let raw_table = batch
-                .1
-                .get(start..start.saturating_add(fit(table_bytes)?))
-                .ok_or_else(|| Error::corrupt("SESparse grain table lies outside what was read"))?;
-            let first_grain = mul(table_number as u64, ENTRIES_PER_TABLE, "grain number")?;
-            for (slot, raw_grain) in raw_table.chunks_exact(8).enumerate() {
-                let grain_entry = u64::from_le_bytes(raw_grain.try_into().unwrap_or([0; 8]));
-                if grain_entry == 0 {
-                    continue;
-                }
-                let grain = add(first_grain, slot as u64, "grain number")?;
-                if grain >= total_grains {
-                    return Err(Error::corrupt(format!(
-                        "SESparse grain table {table_index} has an entry for grain {grain}, beyond the disk"
-                    )));
-                }
-                let kind = decode_grain(grain_entry, grains_offset, source.len(), accept_unverified)?;
-                push_run(&mut runs, mul(grain, GRAIN_SIZE, "grain offset")?, capacity, kind)?;
             }
         }
+        drop(wanted);
+        runs.sort_unstable_by_key(|run| run.offset);
+        runs.dedup_by(|next, last| {
+            let joins = last.offset.checked_add(last.len) == Some(next.offset) && continues(last, next.kind);
+            if joins {
+                last.len = last.len.saturating_add(next.len);
+            }
+            joins
+        });
+        runs.shrink_to_fit();
         Ok(SeSparse {
             source,
             capacity,
@@ -326,21 +343,27 @@ fn decode_grain(entry: u64, grains_offset: u64, file_len: u64, accept_unverified
     }
 }
 
-fn push_run(runs: &mut Vec<Run>, offset: u64, capacity: u64, kind: RunKind) -> Result<()> {
+/// Whether a range of `kind` that starts where `last` ends is stored right behind it.
+fn continues(last: &Run, kind: RunKind) -> bool {
+    match (last.kind, kind) {
+        (RunKind::Zero, RunKind::Zero) => true,
+        (RunKind::Allocated { file_offset: a }, RunKind::Allocated { file_offset: b }) => {
+            a.checked_add(last.len) == Some(b)
+        }
+        _ => false,
+    }
+}
+
+/// Adds one grain. It extends the last run if that run was added at or after position `from` and continues here.
+fn push_run(runs: &mut Vec<Run>, from: usize, offset: u64, capacity: u64, kind: RunKind) -> Result<()> {
     // The last grain of a disk whose size is not a multiple of the grain size is shorter.
     let len = GRAIN_SIZE.min(capacity.saturating_sub(offset));
-    if let Some(last) = runs.last_mut() {
-        let last_end = add(last.offset, last.len, "run end")?;
-        let continues = match (last.kind, kind) {
-            (RunKind::Zero, RunKind::Zero) => true,
-            (RunKind::Allocated { file_offset: a }, RunKind::Allocated { file_offset: b }) => {
-                a.checked_add(last.len) == Some(b)
+    if runs.len() > from {
+        if let Some(last) = runs.last_mut() {
+            if add(last.offset, last.len, "run end")? == offset && continues(last, kind) {
+                last.len = add(last.len, len, "run length")?;
+                return Ok(());
             }
-            _ => false,
-        };
-        if last_end == offset && continues {
-            last.len = add(last.len, len, "run length")?;
-            return Ok(());
         }
     }
     runs.push(Run { offset, len, kind });
@@ -605,8 +628,7 @@ pub(crate) mod tests {
     #[test]
     fn neighbouring_tables_are_read_together() {
         // Tables are numbered in the order they are first used: disk tables 2, 0, 1, 3 get the indices 0, 1, 2, 3.
-        // The directory is walked by disk table, so it asks for the indices 1, 2, 0, 3: one read for 1 and 2,
-        // one for 0, one for 3.
+        // The directory names them as 1, 2, 0, 3; in the file they lie next to each other, so one read fetches all.
         let grains = [
             (2 * 4096, allocated(0)),
             (5, allocated(1)),
@@ -627,7 +649,7 @@ pub(crate) mod tests {
             .copied()
             .filter(|&len| len >= table)
             .collect();
-        assert_eq!(table_reads, [2 * table, table, table]);
+        assert_eq!(table_reads, [4 * table]);
         for (grain, index) in [(2 * 4096u64, 0u8), (5, 1), (4096 + 7, 2), (3 * 4096 + 9, 3)] {
             let mut buf = [0u8; 4096];
             delta
@@ -635,5 +657,15 @@ pub(crate) mod tests {
                 .unwrap();
             assert!(buf.iter().all(|&b| b == index + 1), "grain {grain}");
         }
+    }
+
+    #[test]
+    fn runs_join_across_tables_whatever_order_the_tables_have() {
+        // The table of the second 16 MiB was used first. Its first grain lies behind the last grain of the first
+        // 16 MiB, on the disk and in the delta, so both form one run.
+        let grains = [(4096, allocated(1)), (4095, allocated(0)), (7, allocated(5))];
+        let delta = open(build(64 * MIB, &grains, 8), 64 * MIB).unwrap();
+        let runs: Vec<(u64, u64)> = delta.runs().iter().map(|run| (run.offset, run.len)).collect();
+        assert_eq!(runs, [(7 * 4096, 4096), (4095 * 4096, 2 * 4096)]);
     }
 }
