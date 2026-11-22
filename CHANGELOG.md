@@ -3,8 +3,11 @@
 Each release lists what a program that embeds OpenVmfs has to know: changes to the API or the C interface, changes
 in what is read and what is refused, and corrected read errors (data that an earlier version returned wrongly).
 
-## Not released yet
+## 0.4.1
 
+- **API and C interface:** unchanged (interface version 5).
+- **Read or refused:** unchanged.
+- **Corrected read errors:** none.
 - Verified on a 40 TiB datastore made by ESXi 8.0 U3 (`fixture-big-esxi8-v1`): disks behind the first and the
   second 16 TiB boundary read as on ESXi. No change to the library was needed.
 - Opening a disk whose snapshot delta was written in random order needs far fewer reads: the grain tables are
