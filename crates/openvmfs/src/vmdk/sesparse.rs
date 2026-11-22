@@ -323,14 +323,16 @@ fn decode_grain(entry: u64, grains_offset: u64, file_len: u64, accept_unverified
         // zeros even where the parent holds data. The remaining bits may still name the grain that used to hold
         // the data; they are not used.
         1 => Ok(RunKind::Zero),
-        // Zero grain. Other readers treat it as zeros; it has not been seen in a delta written by ESXi yet.
+        // Zero grain. ESXi 8.0 U3 writes it when it merges a delta into its parent delta (a snapshot is deleted)
+        // for ranges the guest had discarded in the merged delta. Verified: the range reads as zeros even where
+        // the parent holds data. ESXi wrote no other bits; an entry that has some is refused.
         2 => {
-            if accept_unverified {
+            if entry == 2 << 60 || accept_unverified {
                 Ok(RunKind::Zero)
             } else {
                 Err(Error::unsupported(format!(
-                    "SESparse grain table entry {entry:#018x} is a zero grain (type 2); how to read it has not been \
-                     verified against data written by ESXi yet"
+                    "SESparse grain table entry {entry:#018x} is a zero grain (type 2) with further bits set; that \
+                     has not been seen in a delta written by ESXi"
                 )))
             }
         }
@@ -544,18 +546,19 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn zero_grains_are_refused_until_seen_on_esxi() {
+    fn zero_grains_read_as_zeros_and_are_refused_when_they_carry_other_bits() {
+        let expected = [Run {
+            offset: 7 * 4096,
+            len: 4096,
+            kind: RunKind::Zero,
+        }];
         let zero = build(32 * MIB, &[(7, 2 << 60)], 0);
-        assert_eq!(open(zero.clone(), 32 * MIB).unwrap_err().kind(), ErrorKind::Unsupported);
-        let delta = SeSparse::open(Arc::new(MemorySource::new(zero)), 32 * MIB, true).unwrap();
-        assert_eq!(
-            delta.runs(),
-            &[Run {
-                offset: 7 * 4096,
-                len: 4096,
-                kind: RunKind::Zero
-            }]
-        );
+        assert_eq!(open(zero, 32 * MIB).unwrap().runs(), &expected);
+
+        let odd = build(32 * MIB, &[(7, (2 << 60) | 5)], 0);
+        assert_eq!(open(odd.clone(), 32 * MIB).unwrap_err().kind(), ErrorKind::Unsupported);
+        let delta = SeSparse::open(Arc::new(MemorySource::new(odd)), 32 * MIB, true).unwrap();
+        assert_eq!(delta.runs(), &expected);
     }
 
     #[test]

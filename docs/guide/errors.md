@@ -42,7 +42,7 @@ Overrides: `replay_journal` applies what the host's journal holds and then opens
 | `VMFSSPARSE` / `COWD` | A snapshot delta in the format older VMFS versions used | Consolidate the snapshot on ESXi |
 | `not closed cleanly` | A snapshot delta that a running VM was writing to | Open the level below it |
 | `parent ... is on another datastore` | A snapshot chain that crosses datastores | Open both datastores and read the levels yourself, or consolidate |
-| `zero grain (type 2)` | A kind of delta entry that was never seen on ESXi | Tell us: we would like the sample. `accept_unverified` reads it as zeros |
+| `zero grain (type 2) with further bits set` | A delta entry in a form that was never seen on ESXi (plain zero grains are read) | Tell us: we would like the sample. `accept_unverified` reads it as zeros |
 | `to be zeroed` bitmap | A marker value that was never seen | Tell us. `accept_unverified` treats the block as never written |
 | `LVM major version`, `VMFS-L`, `major version` other than 24 | VMFS5, a boot-device volume, or something newer than VMFS6 | Not supported |
 | `minor version` | VMFS 6.81 or another version without a verified sample | Tell us |

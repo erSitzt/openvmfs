@@ -72,7 +72,7 @@ with the magic 0xDEAFC0DE **[V]**; the journal itself has not been analysed.
 |---|---|---|
 | 0 | unallocated; the whole entry is 0 | from the parent **[V]** |
 | 1 | discarded by the guest (SCSI unmap) | **zeros**, even where the parent holds data **[V]** |
-| 2 | zero grain | zeros **[1]**; never seen, refused |
+| 2 | zero grain; the whole entry is `0x2000000000000000` | **zeros**, even where the parent holds data **[V]** |
 | 3 | allocated | from the delta **[V]** |
 
 - For type 3, the grain index is split: bits 48–59 hold its low 12 bits, bits 0–47 the rest. `0x3001000000000000`
@@ -84,6 +84,14 @@ How type 1 was settled: a base disk had data at 10 MiB. After a snapshot, the gu
 consolidation of the chain has nothing there, and neither does QEMU's conversion; a reader that falls through to
 the parent would return the old data. One level up, 8 sectors written into the discarded MiB read back, and the
 rest of the MiB stays zero.
+
+How type 2 was settled, and where it comes from (`fixture-merge-esxi8-v1`, ESXi 8.0 U3): ESXi writes zero grains
+when a snapshot is deleted and the delta of that snapshot is merged into its **parent delta**. Every range the
+guest had discarded in the merged delta (type 1 there) is a zero grain in the parent afterwards; discards that the
+parent delta received directly stay type 1. A guest discarded 1 MiB that held data in the base and 1 MiB that held
+data in an older delta; after the snapshot was deleted, ESXi's consolidation of the chain has zeros in both places,
+and still has the data one level further down. Seen with disks on paravirtual SCSI, LSI Logic SAS and NVMe
+controllers. A disk on a SATA controller got neither type: the Linux guest could not discard on it.
 
 ## Chains
 
@@ -97,7 +105,7 @@ each range from the newest link that defines it. It refuses:
 
 - a parent on another datastore;
 - a delta that was not closed cleanly, which is what the active delta of a running VM looks like;
-- zero grains (type 2) and any header value not listed above;
+- zero grains (type 2) that carry any other bits, and any header value not listed above;
 - deltas in the older COWD format (`VMFSSPARSE`), which VMFS6 does not create.
 
 Each delta's tables are read completely when the disk is opened and kept as a list of runs. A delta with very

@@ -33,7 +33,6 @@ by ESXi that holds reference data whose position is known.
 
 | # | Question |
 |---|---|
-| 16 | SESparse zero grains (type 2): when does ESXi write them? Refused until seen. |
 | 17 | How ESXi escapes a double quote in an extent file name. |
 | 18 | The exact descriptor lines of an encrypted disk. |
 
@@ -55,3 +54,4 @@ by ESXi that holds reference data whose position is known.
 | What does the delta look like that a running VM writes to? | Its "replay journal" flag is 1, and up to 1.3 s after its creation its tables showed none of the data written since. Refused. | `probe-series1` |
 | Can a disk be read from a storage snapshot while its VM writes to it? | No: block allocations of the last seconds are missing from the block map. The on-disk lock mode tells such files apart. | `fixture-inuse-v1` |
 | Where are the block allocations that an image of a writing VM lacks? | In the journal of the host, as byte-range changes to metadata blocks. Applying them makes the disk consistent (5 of 5 images). | `fixture-journal-v1` |
+| When does ESXi write SESparse zero grains (type 2), and how do they read? | When a deleted snapshot's delta is merged into its parent delta, for ranges the guest had discarded in it. As zeros, also over data of the parent. | `fixture-merge-esxi8-v1` |

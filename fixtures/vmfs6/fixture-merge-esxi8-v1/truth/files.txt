@@ -1,0 +1,41 @@
+# Disk DescriptorFile
+version=1
+encoding="UTF-8"
+CID=76d41522
+parentCID=e3157da8
+createType="seSparse"
+parentFileNameHint="pv-000011.vmdk"
+# Extent description
+RW 4194304 SESPARSE "pv-000012-sesparse.vmdk"
+
+# The Disk Data Base 
+#DDB
+
+ddb.grain = "8"
+ddb.longContentID = "020006dadfebaa9972b4f91a76d41522"
+-rw-------    1 root     root      29921280 Nov 22 21:06 pv-000001-sesparse.vmdk
+-rw-------    1 root     root           299 Nov 22 21:06 pv-000001.vmdk
+-rw-------    1 root     root      29904896 Nov 22 21:06 pv-000002-sesparse.vmdk
+-rw-------    1 root     root           306 Nov 22 21:06 pv-000002.vmdk
+-rw-------    1 root     root      29888512 Nov 22 21:06 pv-000003-sesparse.vmdk
+-rw-------    1 root     root           306 Nov 22 21:06 pv-000003.vmdk
+-rw-------    1 root     root      30023680 Nov 22 21:08 pv-000004-sesparse.vmdk
+-rw-------    1 root     root           306 Nov 22 21:08 pv-000004.vmdk
+-rw-------    1 root     root      29908992 Nov 22 21:19 pv-000006-sesparse.vmdk
+-rw-------    1 root     root           306 Nov 22 21:19 pv-000006.vmdk
+-rw-------    1 root     root      29925376 Nov 22 21:08 pv-000007-sesparse.vmdk
+-rw-------    1 root     root           306 Nov 22 21:08 pv-000007.vmdk
+-rw-------    1 root     root      29884416 Nov 22 21:08 pv-000008-sesparse.vmdk
+-rw-------    1 root     root           306 Nov 22 21:07 pv-000008.vmdk
+-rw-------    1 root     root      30097408 Nov 22 21:08 pv-000009-sesparse.vmdk
+-rw-------    1 root     root           306 Nov 22 21:07 pv-000009.vmdk
+-rw-------    1 root     root      29900800 Nov 22 21:08 pv-000010-sesparse.vmdk
+-rw-------    1 root     root           306 Nov 22 21:08 pv-000010.vmdk
+-rw-------    1 root     root      29884416 Nov 22 21:08 pv-000011-sesparse.vmdk
+-rw-------    1 root     root           306 Nov 22 21:08 pv-000011.vmdk
+-rw-------    1 root     root      29933568 Nov 22 21:19 pv-000012-sesparse.vmdk
+-rw-------    1 root     root           306 Nov 22 21:19 pv-000012.vmdk
+-rw-------    1 root     root     2147483648 Nov 22 21:06 pv-flat.vmdk
+# Change Tracking File
+changeTrackPath="cbt-000012-ctk.vmdk"
+

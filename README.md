@@ -58,6 +58,8 @@ been tested.
 | Disks written by a Linux guest (paravirtual SCSI) | ✓ | ✓ | `fixture-guest-v1`, `fixture-chain-esxi8-v1` |
 | Thin disks filled by a guest front to back and at random | not run | ✓ | measured, [`docs/guide/backup.md`](docs/guide/backup.md) |
 | Snapshot chain of three deltas with guest discards | ✓ | ✓ | `fixture-chain-v2`, `fixture-chain-esxi8-v1` |
+| Chain of eleven deltas, snapshots deleted in the middle while the VM ran (deltas merged, zero grains) | not run | ✓ | `fixture-merge-esxi8-v1` |
+| Disks on LSI Logic SAS, SATA and NVMe controllers, and a disk with changed-block tracking, each with that chain | not run | ✓ | measured: 25 reads at five levels equal ESXi's consolidation |
 | Snapshot delta of a million random 4 KiB writes | not run | ✓ | measured, same guide |
 | Datastore above 16 TiB | ✓ 17 TiB | ✓ 40 TiB | `fixture-big-v1`, `fixture-big-esxi8-v1` |
 | Datastore on two devices | ✓ | ✓ | `fixture-span-v1`, `fixture-span-esxi8-v1` |
@@ -110,9 +112,9 @@ other data you would not publish; the messages of `openvmfs` contain file names 
 | Datastores shared by a cluster of hosts, with many running VMs | Lock states and journals of several hosts at once; our datastores had one host | Two hosts, 17 running VMs (#1) |
 | Long-lived, fragmented, nearly full datastores | Block maps and resource pools that a lab does not produce in a week | none |
 | Datastores extended over more than two devices, or grown in place | Extent tables beyond the ones we saw | none |
-| Windows guests, guests with other virtual controllers (LSI, NVMe, SATA) | Whether they leave anything different in thin disks and deltas | Windows Server 2022 with LSI Logic SAS, one run (#1) |
-| Snapshot chains made by backup products, long chains, deltas after a consolidation | SESparse features we refuse because ESXi never wrote them for us (zero grains) | none |
-| Disks with changed-block tracking, multi-writer disks, linked clones, Horizon and vSphere Replication disks | Whether they open, and which refusal they hit | Changed-block tracking (#1). The others: none |
+| Windows guests | Whether they leave anything different in thin disks and deltas | Windows Server 2022, one run (#1) |
+| Snapshot chains made by backup products, chains longer than twelve links | SESparse features ESXi never wrote for us. Deleting snapshots in our lab produced one we had refused until then (zero grains) | none |
+| Multi-writer disks, linked clones, Horizon and vSphere Replication disks | Whether they open, and which refusal they hit | none |
 | Linux multipath devices, Windows with MPIO, arm64 | Opening and unbuffered reading on those device types | Windows with MPIO, read by the caller's own device code (#1) |
 | The backup order under real load, on real arrays | More runs than our 16, and with shorter or longer gaps between VM snapshot and storage snapshot | 5 runs on one array, all equal (#1) |
 
@@ -129,7 +131,7 @@ has another way to read the data should fall back to it.
 | A virtual disk that an ESXi host had open for writing when the image was taken (error kind `InUse`) | Its newest writes may be missing while later ones are present |
 | "To be zeroed" markers other than the one ESXi was seen to write | Never seen |
 | A snapshot delta that was not closed cleanly (the active delta of a running VM) | Its journal would have to be replayed |
-| Zero grains in snapshot deltas, deltas in the older COWD format, chains across datastores | Never seen, or not created by VMFS6 |
+| Deltas in the older COWD format, chains across datastores | Not created by VMFS6, or the parent is not on the volume |
 | Journals that hold anything but the transaction shape seen so far (only when replay is asked for) | Not understood |
 | VMFS5, VMFS-L, VMFS 6.81, 4Kn devices | No verified sample yet |
 | Extended LVM extent metadata | Never seen; datastores of 3 TiB, 17 TiB and 40 TiB do not use it |

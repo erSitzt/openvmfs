@@ -284,3 +284,24 @@ them were also hashed on ESXi.
 
 Two earlier runs on 16 GiB datastores filled them before reaching cluster 256 and are not kept: 56,848 files on ESXi
 7.0.3 and 41,775 on ESXi 8.0 U3, all read as written.
+
+## fixture-merge-esxi8-v1
+
+Five 2 GiB thin disks of one VM on ESXi 8.0 U3, one each on a paravirtual SCSI controller (`pv`, and `cbt` with
+changed-block tracking), LSI Logic SAS (`lsi`), SATA (`sata`) and NVMe (`nvme`). A Linux guest wrote 3 MiB of random
+data and 40 scattered 4 KiB blocks per round and discarded parts of them (`blkdiscard`), with a VM snapshot before
+each of twelve rounds. Then, with the VM running:
+
+1. Snapshots 6 and 7 were deleted: ESXi merged their deltas into `-000004`. The discards of those two rounds are
+   **zero grains** (type 2) there; the discards `-000004` received itself are still type 1.
+2. After a snapshot, the guest discarded 1 MiB of data that lies in the base (98 MiB) and 1 MiB that lies in an
+   older delta (292 MiB); after another snapshot and a write, the first of the two was deleted. The discards are
+   zero grains in `-000012`, over data of the levels below.
+
+The chain is base, `-000001` to `-000004`, `-000007` to `-000012`, `-000006` (top). On the full image, 25 reads
+(five disks, levels `-000004`, `-000006`, `-000011`, `-000012` and the earlier top) had the SHA-256 of ESXi's
+consolidation of that level (`truth/sha256.txt` for the last three). The SATA disk has no discards: the guest
+reported them as not supported.
+
+Partial image (91 MiB of the device, 4.8 MiB packed): the tables of the `pv` and `nvme` chains and nine single
+megabytes, whose hashes from ESXi's consolidations are in `truth/mib.sha256.txt`.

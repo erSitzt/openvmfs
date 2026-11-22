@@ -3,7 +3,7 @@
 //! Used when a large, mostly empty device is captured only in part: every range printed here must be inside the
 //! captured ranges, otherwise the reader saw zeros where the device has data.
 //!
-//! Usage: trace_reads IMAGE [--unverified] [--in-use] [--replay] (DESCRIPTOR | dir:PATH | file:PATH)...
+//! Usage: trace_reads IMAGE [--unverified] [--in-use] [--replay] (DESCRIPTOR | part:DESCRIPTOR:FIRST_MIB:MIB_COUNT | dir:PATH | file:PATH)...
 //! Output: OFFSET LENGTH per line, merged.
 
 #![allow(
@@ -52,7 +52,7 @@ fn main() {
     }
     let mut buf = vec![0u8; 1 << 20];
     for arg in &args {
-        // `dir:PATH` lists a directory, `file:PATH` reads a file, anything else is a disk descriptor.
+        // `dir:PATH` lists a directory, `file:PATH` reads a file, anything else is a disk descriptor, read in full.
         let result = if let Some(path) = arg.strip_prefix("dir:") {
             volume.read_dir(path).map(|_| ())
         } else if let Some(path) = arg.strip_prefix("file:") {
@@ -60,6 +60,17 @@ fn main() {
                 .open_file(path)
                 .and_then(|file| file.read_all(1 << 30))
                 .map(|_| ())
+        } else if let Some(spec) = arg.strip_prefix("part:") {
+            // `part:DESCRIPTOR:FIRST_MIB:MIB_COUNT` reads only that part of a disk.
+            let mut fields = spec.rsplitn(3, ':');
+            let count: u64 = fields.next().and_then(|n| n.parse().ok()).expect("MiB count");
+            let first: u64 = fields.next().and_then(|n| n.parse().ok()).expect("first MiB");
+            volume.open_disk(fields.next().expect("descriptor")).and_then(|disk| {
+                for mib in first..first + count {
+                    disk.read_exact_at(mib << 20, &mut buf)?;
+                }
+                Ok(())
+            })
         } else {
             volume.open_disk(arg).and_then(|disk| {
                 for range in disk.data_ranges() {
