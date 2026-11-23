@@ -151,7 +151,7 @@ pub struct FileStat {
     pub generation: u32,
     /// How ESXi hosts had the file locked when the image was taken.
     pub lock: LockMode,
-    /// The host that held the lock (all zeros when free).
+    /// The host that held the lock (all zeros when free; the first owner of a multi-writer lock).
     pub lock_owner: Uuid,
 }
 

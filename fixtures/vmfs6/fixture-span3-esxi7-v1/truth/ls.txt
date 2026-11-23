@@ -1,0 +1,13 @@
+total 13623424
+drwxr-xr-x    1 root     root         73728 Nov 23 09:57 .
+drwxr-xr-t    1 root     root         73728 Nov 23 09:56 ..
+-rw-------    1 root     root     2097152000 Nov 23 09:56 l1-flat.vmdk
+-rw-------    1 root     root           441 Nov 23 09:56 l1.vmdk
+-rw-------    1 root     root     3670016000 Nov 23 09:56 l2-flat.vmdk
+-rw-------    1 root     root           440 Nov 23 09:56 l2.vmdk
+-rw-------    1 root     root     3984588800 Nov 23 09:56 l3-flat.vmdk
+-rw-------    1 root     root           440 Nov 23 09:56 l3.vmdk
+-rw-------    1 root     root     4194304000 Nov 23 09:57 l4-flat.vmdk
+-rw-------    1 root     root           440 Nov 23 09:57 l4.vmdk
+-rw-------    1 root     root     1073741824 Nov 23 09:56 t-flat.vmdk
+-rw-------    1 root     root           465 Nov 23 09:56 t.vmdk

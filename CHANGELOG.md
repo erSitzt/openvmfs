@@ -18,10 +18,14 @@ in what is read and what is refused, and corrected read errors (data that an ear
 - **Read or refused:** a datastore on several devices whose device was later enlarged and grown in place is now
   read. ESXi appends the new space at the end of the volume, behind the devices that were added before, and
   OpenVmfs up to 0.4.1 failed to open such a datastore with `Corrupt` ("device 2 starts at extent 15 of the volume,
-  expected 61"). Verified on ESXi 8.0 U3 with three devices (`fixture-span3-esxi8-v1`).
+  expected 61"). Verified on ESXi 7.0.3 and 8.0 U3 with three devices (`fixture-span3-esxi7-v1`, `fixture-span3-esxi8-v1`).
   `LvmDevice::volume_len` is now the sum of all parts of a device.
-- Verified without a change: a single-device datastore grown in place (`fixture-grow-esxi8-v1`), a chain of 31
-  deltas, and a multi-writer disk (refused as in use while a VM has it open).
+- A multi-writer disk that a VM had open is refused as before (`InUse`), but the message and `lock_owner` now name
+  the first host from the lock's owner list instead of an all-zero host, and the message no longer advises a VM
+  snapshot, which does not cover such disks.
+- Verified without a change, on ESXi 7.0.3 and 8.0 U3: a single-device datastore grown in place
+  (`fixture-grow-esxi7-v1`, `fixture-grow-esxi8-v1`), a chain of 31 deltas, and a multi-writer disk (refused as in
+  use while a VM has it open).
 - The second pointer block in `.pb2.sf` is verified on ESXi 7.0.3 as well (`fixture-pb2-v1`, 132,000 small files).
 - Verified on a datastore that ESXi 8.0 U3 extended onto a second device (`fixture-span-esxi8-v1`). No change to
   the library was needed.

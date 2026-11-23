@@ -59,14 +59,14 @@ been tested.
 | Thin disks filled by a guest front to back and at random | ✓ | ✓ | measured, [`docs/guide/backup.md`](docs/guide/backup.md): block maps identical to ESXi's |
 | Snapshot chain of three deltas with guest discards | ✓ | ✓ | `fixture-chain-v2`, `fixture-chain-esxi8-v1` |
 | Chain of eleven deltas, snapshots deleted in the middle while the VM ran (deltas merged, zero grains) | ✓ | ✓ | `fixture-merge-esxi8-v1`; on 7.0.3 read once, not kept as a fixture |
-| Chain of 31 deltas, the deepest ESXi allows | not run | ✓ | measured: top and middle level equal ESXi's consolidation |
-| Multi-writer disk: read while no VM has it open, refused (`InUse`) while one does | not run | ✓ | measured |
+| Chain of 31 deltas, the deepest ESXi allows | ✓ | ✓ | measured: top and middle level equal ESXi's consolidation |
+| Multi-writer disk: read while no VM has it open, refused (`InUse`) while one does | ✓ | ✓ | measured |
 | Disks on LSI Logic SAS, SATA and NVMe controllers, and a disk with changed-block tracking, each with that chain | ✓ | ✓ | measured: 20 reads (7.0.3) and 25 reads (8.0 U3) at four or five levels equal ESXi's consolidation |
 | Snapshot delta of a million random 4 KiB writes | ✓ | ✓ | measured, same guide: SHA-256 equal to ESXi's consolidation |
 | Datastore above 16 TiB | ✓ 17 TiB | ✓ 40 TiB | `fixture-big-v1`, `fixture-big-esxi8-v1` |
 | Datastore on two devices | ✓ | ✓ | `fixture-span-v1`, `fixture-span-esxi8-v1` |
-| Datastore on three devices, the first one enlarged and grown in place afterwards | not run | ✓ | `fixture-span3-esxi8-v1` |
-| Datastore on one device that was enlarged and grown in place | not run | ✓ | `fixture-grow-esxi8-v1` |
+| Datastore on three devices, the first one enlarged and grown in place afterwards | ✓ | ✓ | `fixture-span3-esxi7-v1`, `fixture-span3-esxi8-v1` |
+| Datastore on one device that was enlarged and grown in place | ✓ | ✓ | `fixture-grow-esxi7-v1`, `fixture-grow-esxi8-v1` |
 | More than 100,000 small files on one datastore | ✓ 132,000 | ✓ 100,697 | `fixture-pb2-v1`, `fixture-many-esxi8-v1`, `fixture-pb2-esxi8-v1` |
 | More than 131,072 sub-blocks | ✓ | ✓ | `fixture-pb2-v1`, `fixture-pb2-esxi8-v1` |
 | Disk below a VM snapshot, on a storage snapshot of the running VM | ✓ 9 of 9 | ✓ 7 of 7 | [`docs/consistency.md`](docs/consistency.md) |

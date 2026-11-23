@@ -15,7 +15,7 @@ pub use descriptor::{Access, Descriptor, ExtentLine, ExtentType, NO_PARENT_CID};
 
 use crate::bytes::{add, mul};
 use crate::error::{Error, Result, ResultExt, UnsupportedReason};
-use crate::fs::{Extent, ExtentKind, File, FileKind, Volume};
+use crate::fs::{Extent, ExtentKind, File, FileKind, LockMode, Volume};
 use crate::io::BlockSource;
 
 use sesparse::{RunKind, SeSparse};
@@ -192,6 +192,15 @@ impl Disk {
             // the VMFS journal, not where a reader looks. Reading it gives a mix of old and new.
             let lock = file.stat().lock;
             if lock.is_open_for_writing() && !volume.accepts_in_use() && !volume.journal_replayed() {
+                if lock == LockMode::MultiWriter {
+                    return Err(Error::in_use(format!(
+                        "{extent_path:?} is a multi-writer disk and was open on host {} when this image was taken \
+                         (lock {lock:?}); its newest writes may be missing while later ones are present. VM snapshots \
+                         leave such disks out: read it from an image taken while no VM had it open, or back it up \
+                         another way",
+                        file.stat().lock_owner
+                    )));
+                }
                 return Err(Error::in_use(format!(
                     "{extent_path:?} was open for writing on host {} when this image was taken (lock {lock:?}); its \
                      newest writes may be missing while later ones are present. Take a VM snapshot before the \

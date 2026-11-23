@@ -30,6 +30,10 @@ storage snapshot and open the descriptor below it ([backup.md](backup.md)). A lo
 crashed while it had the file open. The file's newest metadata is then in that host's journal, where ESXi finds it
 when it takes the datastore over.
 
+For a disk attached with multi-writer sharing (shared disks of cluster software) the message says so. A VM
+snapshot does not help there, because VM snapshots leave such disks out: the disk is readable only from an image
+taken while no VM had it open.
+
 Overrides: `replay_journal` applies what the host's journal holds and then opens the disk (experimental).
 `accept_in_use` opens it as it is, which gives you a disk with missing blocks.
 

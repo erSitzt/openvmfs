@@ -77,7 +77,7 @@ you like; areas outside it are zeros.
 
 | Kind | What it means for the backup |
 |---|---|
-| `InUse` | The disk was open for writing when the storage snapshot was taken: step 1 did not happen for this disk, or it is an independent disk that VM snapshots leave out. Do not read it from this storage snapshot. Back it up another way |
+| `InUse` | The disk was open for writing when the storage snapshot was taken: step 1 did not happen for this disk, or it is an independent or multi-writer disk that VM snapshots leave out. Do not read it from this storage snapshot. Back it up another way |
 | `Unsupported` | OpenVmfs will not read this disk or volume: a raw device mapping, an encrypted disk, a layout it has not verified. The data may be fine. Back it up another way |
 | `Corrupt` | The metadata contradicts itself. Do not trust anything read from this object; alert someone |
 | `Io` | The device failed. Retry or fail the job |

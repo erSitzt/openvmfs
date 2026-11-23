@@ -139,7 +139,7 @@ pub(crate) struct Inode {
     pub addressing: AddressingMode,
     pub unwritten_blocks: u64,
     pub block_shift: u8,
-    /// How the file was locked, and by which host.
+    /// How the file was locked, and by which host. A multi-writer lock has its owners in a list; this is the first.
     pub lock_mode: LockMode,
     pub lock_owner: crate::Uuid,
     /// The address array: block addresses or pointer-block addresses, depending on `addressing`.
@@ -214,6 +214,13 @@ impl Inode {
             .map(|chunk| u64::from_le_bytes(chunk.try_into().unwrap_or([0; 8])))
             .collect();
 
+        let lock_mode = LockMode::from_raw(lock.u32(0x24)?);
+        // A multi-writer lock leaves the owner field empty and lists its owners further down: their number at
+        // 0x40, the first one's UUID at 0x54.
+        let mut lock_owner = lock.uuid(0x28)?;
+        if lock_mode == LockMode::MultiWriter && lock_owner == crate::Uuid::default() && lock.u32(0x40)? > 0 {
+            lock_owner = lock.uuid(0x54)?;
+        }
         Ok(Inode {
             addr,
             volume_offset,
@@ -233,8 +240,8 @@ impl Inode {
                 .map_err(|e| e.context(format!("file descriptor {addr} at volume offset {volume_offset:#x}")))?,
             unwritten_blocks: u64::from(meta.u32(0x48)?) | (u64::from(meta.u32(0x54)?) << 32),
             block_shift: meta.u8(0x89)?,
-            lock_mode: LockMode::from_raw(lock.u32(0x24)?),
-            lock_owner: lock.uuid(0x28)?,
+            lock_mode,
+            lock_owner,
             addrs,
         })
     }
@@ -335,6 +342,30 @@ pub(crate) mod tests {
         let mut odd_type = good;
         odd_type[4096 + 0x0C] = 1;
         assert_eq!(kind(&odd_type, addr, 0x72_6000), ErrorKind::Corrupt);
+    }
+
+    #[test]
+    fn a_multi_writer_lock_names_its_first_owner() {
+        let geo = geometry();
+        let addr = FdAddr::system(3);
+        let owner = [
+            0x51, 0xfb, 0xfd, 0x6a, 0x18, 0xb1, 0x95, 0xa9, 0x8a, 0x09, 0x00, 0x50, 0x56, 0x8b, 0x55, 0x83,
+        ];
+        // As ESXi 7.0.3 and 8.0 U3 write it: mode 3, the owner field empty, one owner in the list.
+        let mut raw = build_fd(addr, 0x72_6000, 3, 1, 0, (1 << 20, 20), &[]);
+        raw[0x24] = 3;
+        raw[0x40] = 1;
+        raw[0x54..0x64].copy_from_slice(&owner);
+        let inode = Inode::parse(&raw, addr, 0x72_6000, &geo).unwrap();
+        assert_eq!(inode.lock_mode, LockMode::MultiWriter);
+        assert_eq!(inode.lock_owner, crate::Uuid::from_bytes(owner));
+        assert_eq!(inode.lock_owner.to_string(), "6afdfb51-a995b118-098a-0050568b5583");
+
+        // An exclusive lock keeps its owner where it always was, whatever follows.
+        raw[0x24] = 1;
+        raw[0x28] = 7;
+        let inode = Inode::parse(&raw, addr, 0x72_6000, &geo).unwrap();
+        assert_eq!(inode.lock_owner.to_string(), "00000007-00000000-0000-000000000000");
     }
 
     #[test]

@@ -236,6 +236,17 @@ Also measured on the 256 GiB datastore of this host, without a fixture:
   lock is mode 3 with a zero owner and the host in a list behind it (`docs/format/40-file-descriptor.md`), and
   OpenVmfs refuses the disk as in use.
 
+## fixture-span3-esxi7-v1, fixture-grow-esxi7-v1
+
+The same two recipes as `fixture-span3-esxi8-v1` and `fixture-grow-esxi8-v1`, on ESXi 7.0.3: a datastore on three
+4 GiB devices whose first device was enlarged to 8 GiB and grown in place, and a single-device datastore grown the
+same way. Same disks, same sizes. ESXi 7.0.3 lays the volume out exactly as 8.0 U3 does: the first device's new
+space is at the end of the volume. Whole-device images (0.9 MiB and 0.4 MiB packed), `truth/` as above.
+
+Also measured on this host without a fixture: a chain of 31 deltas (the 32nd snapshot fails here too; top and
+middle level have the SHA-256 of ESXi's consolidation) and a multi-writer disk (lock mode 3 with one owner in the
+list while the VM runs, refused as in use; read with ESXi's hash after power-off).
+
 ## probe-series1
 
 No image, only the record of seven consistency runs (`results.json`), made with

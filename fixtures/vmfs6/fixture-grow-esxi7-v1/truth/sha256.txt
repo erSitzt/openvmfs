@@ -1,0 +1,3 @@
+9cab09c028b32aa7bad18e9ae0ab32843b63ae7c9d4178fd7417a0da83deddfd  pat/l1-flat.vmdk
+a0582e8c072fe31370ef31726ec3fe4ad09aced4a175e82e972fc11c52790aa3  pat/l2-flat.vmdk
+9954f9bd9ff063bd93126487fdae81196a95ce5339d7aa80bb8eb9db6f129212  pat/t-flat.vmdk
