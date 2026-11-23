@@ -3,8 +3,11 @@
 Each release lists what a program that embeds OpenVmfs has to know: changes to the API or the C interface, changes
 in what is read and what is refused, and corrected read errors (data that an earlier version returned wrongly).
 
-## Not released yet
+## 0.4.2
 
+- **API and C interface:** the C interface is unchanged (interface version 5). In the Rust API,
+  `LvmDevice::volume_len` is now the sum of all parts of a device (see below).
+- **Corrected read errors:** none.
 - **Read or refused:** a datastore whose sub-block pool has grown past 131,072 sub-blocks is now read. ESXi then
   stores a second pointer block for its sub-block file, and OpenVmfs up to 0.4.1 refused the whole datastore with
   `Unsupported` ("pointer block address ... in .pb2.sf other than the first one"). Verified on ESXi 8.0 U3

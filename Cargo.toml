@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/openvmfs", "crates/openvmfs-capi", "crates/openvmfs-cli", "crates/openvmfs-testkit"]
 
 [workspace.package]
-version = "0.4.1"
+version = "0.4.2"
 edition = "2021"
 rust-version = "1.85"
 license = "Apache-2.0"

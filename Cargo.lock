@@ -100,11 +100,11 @@ dependencies = [
 
 [[package]]
 name = "openvmfs"
-version = "0.4.1"
+version = "0.4.2"
 
 [[package]]
 name = "openvmfs-capi"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "openvmfs",
  "openvmfs-testkit",
@@ -112,7 +112,7 @@ dependencies = [
 
 [[package]]
 name = "openvmfs-cli"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "openvmfs",
  "sha2",
@@ -120,7 +120,7 @@ dependencies = [
 
 [[package]]
 name = "openvmfs-testkit"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "flate2",
  "openvmfs",
