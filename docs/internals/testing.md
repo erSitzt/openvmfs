@@ -51,6 +51,28 @@ Fixtures are unpacked on first use into `target/fixture-cache` (about 6 GiB, spa
 | `c_abi` | A C program and the C example, compiled against the header and run |
 | `OpenVmfs.Tests` | The same facts through the .NET binding |
 
+### Damaged metadata, for as long as you like
+
+`robustness` runs 18,000 damaged opens with fixed seeds on every test run. The same idea without a limit:
+
+```bash
+cargo run --release -p openvmfs-testkit --example soak -- --seed 7 --rounds 100000      # all cases
+cargo run --release -p openvmfs-testkit --example soak -- --rounds 1000000 merge journal
+```
+
+It records which metadata a clean run reads on eight fixtures (snapshot chains, zero grains, two and three
+devices, a grown datastore, double indirection, the second pointer block, journal replay, directories), then
+repeats the run with one to three damaged places among those bytes: a byte, or a field of two, four or eight bytes
+set to a value that sizes and addresses rarely survive (0, the maximum, one more or less, shifted, a flipped bit,
+random). It reports every run that panics, reads outside a device, takes more than five seconds or does not end,
+with the seed, the round and the changed bytes.
+
+Last long run (2026-11-23, six seeds, 100,000 rounds per case, 4.8 million runs): no panic, no read outside a
+device, no hang; the slowest run took 0.24 seconds, and the process never held more than 10 MiB. Between 29 and
+66 percent of the runs ended with an error, the rest read without one. That is not a statement about the data
+those runs returned: VMFS metadata carries no checksums, so damage that leaves a structure plausible cannot be
+noticed. It is also not coverage-guided fuzzing; nobody has run that on OpenVmfs yet.
+
 ### Comparing with another reader
 
 ```bash

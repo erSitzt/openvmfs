@@ -26,6 +26,8 @@ in what is read and what is refused, and corrected read errors (data that an ear
 - Verified without a change, on ESXi 7.0.3 and 8.0 U3: a single-device datastore grown in place
   (`fixture-grow-esxi7-v1`, `fixture-grow-esxi8-v1`), a chain of 31 deltas, and a multi-writer disk (refused as in
   use while a VM has it open).
+- New test program `soak` (testkit example): damaged metadata on eight fixtures for any number of rounds. 4.8
+  million runs ended without a panic, a read outside a device or a hang.
 - The second pointer block in `.pb2.sf` is verified on ESXi 7.0.3 as well (`fixture-pb2-v1`, 132,000 small files).
 - Verified on a datastore that ESXi 8.0 U3 extended onto a second device (`fixture-span-esxi8-v1`). No change to
   the library was needed.
